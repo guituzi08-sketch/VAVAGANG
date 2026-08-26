@@ -15,6 +15,27 @@ import { useAuth } from "./AuthContext";
 const CallContext = createContext(null);
 const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
+async function debugVoiceConnection(peer, remoteUid) {
+  const senders = peer.getSenders();
+  const receivers = peer.getReceivers();
+  const transceivers = peer.getTransceivers();
+  const stats = await peer.getStats();
+  const outboundAudio = [...stats.values()].filter((report) => report.type === "outbound-rtp" && report.kind === "audio").map((report) => report.bytesSent ?? 0);
+  const inboundAudio = [...stats.values()].filter((report) => report.type === "inbound-rtp" && report.kind === "audio").map((report) => report.bytesReceived ?? 0);
+  console.info("[VOICE DEBUG] connection", {
+    remoteUid,
+    senders: senders.map((sender) => ({ kind: sender.track?.kind ?? null, readyState: sender.track?.readyState ?? null })),
+    receivers: receivers.map((receiver) => ({ kind: receiver.track?.kind ?? null, readyState: receiver.track?.readyState ?? null })),
+    transceivers: transceivers.map((transceiver) => ({ kind: transceiver.receiver.track?.kind ?? transceiver.sender.track?.kind ?? null, direction: transceiver.direction, currentDirection: transceiver.currentDirection })),
+    connectionState: peer.connectionState,
+    iceConnectionState: peer.iceConnectionState,
+    iceGatheringState: peer.iceGatheringState,
+    signalingState: peer.signalingState,
+    outboundAudioBytes: outboundAudio.reduce((total, bytes) => total + bytes, 0),
+    inboundAudioBytes: inboundAudio.reduce((total, bytes) => total + bytes, 0),
+  });
+}
+
 export function CallProvider({ children }) {
   const { firebaseUser, profile } = useAuth();
   const [localStream, setLocalStream] = useState(null);
@@ -71,21 +92,27 @@ export function CallProvider({ children }) {
     const roomId = roomIdRef.current;
     const peer = new RTCPeerConnection(rtcConfig);
     peers.current.set(remoteUid, peer);
-    const audioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
     const screenAudioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
     const videoTransceiver = peer.addTransceiver("video", { direction: "sendrecv" });
     const remoteAudioStream = new MediaStream();
     const remoteScreenStream = new MediaStream();
-    peer.media = { audioSender: audioTransceiver.sender, screenAudioSender: screenAudioTransceiver.sender, videoSender: videoTransceiver.sender, remoteAudioStream, remoteScreenStream };
+    const audioTrack = localStreamRef.current?.getAudioTracks()[0];
+    const audioSender = audioTrack && localStreamRef.current ? peer.addTrack(audioTrack, localStreamRef.current) : null;
+    peer.media = { audioSender, screenAudioSender: screenAudioTransceiver.sender, videoSender: videoTransceiver.sender, remoteAudioStream, remoteScreenStream };
+    console.info("[VOICE DEBUG] local stream", Boolean(localStreamRef.current));
+    console.info("[VOICE DEBUG] audio tracks", localStreamRef.current?.getAudioTracks().length ?? 0);
+    console.info("[VOICE DEBUG] audio track", { enabled: audioTrack?.enabled ?? false, readyState: audioTrack?.readyState ?? "missing" });
+    console.info("[VOICE DEBUG] audio sender exists", Boolean(audioSender));
     const localAudioTrack = localStreamRef.current?.getAudioTracks()[0];
-    if (localAudioTrack) await audioTransceiver.sender.replaceTrack(localAudioTrack);
+    if (!audioSender && localAudioTrack) throw new Error("Não foi possível adicionar o microfone à PeerConnection.");
     if (screenStreamRef.current) {
       await videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null);
       await screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null);
     }
     peer.ontrack = (event) => {
-      const isScreenTrack = event.transceiver === videoTransceiver || event.transceiver === screenAudioTransceiver;
+      const isScreenTrack = event.track.kind === "video" || event.transceiver === screenAudioTransceiver;
       const stream = isScreenTrack ? remoteScreenStream : remoteAudioStream;
+      console.info("[VOICE DEBUG] REMOTE TRACK RECEIVED", { remoteUid, kind: event.track.kind, streamCount: event.streams.length });
       if (!stream.getTracks().some((track) => track.id === event.track.id)) stream.addTrack(event.track);
       if (isScreenTrack) console.info("[WebRTC][ScreenShare] track received", remoteUid, event.track.kind);
       if (isScreenTrack) updateRemoteScreenStream(remoteUid, stream);
@@ -95,6 +122,7 @@ export function CallProvider({ children }) {
         if (isScreenTrack && !stream.getVideoTracks().length) updateRemoteScreenStream(remoteUid, null);
         console.info("[WebRTC][ScreenShare] track ended", remoteUid);
       };
+      debugVoiceConnection(peer, remoteUid).catch((error) => console.error("[VOICE DEBUG] stats failed", error));
     };
     peer.onicecandidate = async (event) => {
       if (!event.candidate) return;
@@ -108,10 +136,14 @@ export function CallProvider({ children }) {
         setMediaError(`Falha ao enviar ICE candidate: ${error.message}`);
       }
     };
+    peer.onconnectionstatechange = () => {
+      console.info("[VOICE DEBUG] connection state", remoteUid, peer.connectionState, peer.iceConnectionState, peer.iceGatheringState, peer.signalingState);
+    };
 
     if (shouldOffer) {
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
+      console.info("[VOICE DEBUG] offer audio", peer.localDescription?.sdp?.includes("m=audio"));
       await setDoc(doc(db, "rooms", roomId, "signals", `${firebaseUser.uid}_${remoteUid}_offer`), {
         from: firebaseUser.uid,
         to: remoteUid,
@@ -141,11 +173,13 @@ export function CallProvider({ children }) {
             if (peer.signalingState !== "stable") continue;
             await peer.setRemoteDescription({ type: "offer", sdp: signal.sdp });
             processedSignals.current.add(signalKey);
+            console.info("[VOICE DEBUG] received offer audio", signal.sdp.includes("m=audio"));
             const queuedCandidates = pendingCandidates.current.get(signal.from) ?? [];
             await Promise.all(queuedCandidates.map((candidate) => peer.addIceCandidate(candidate)));
             pendingCandidates.current.delete(signal.from);
             const answer = await peer.createAnswer();
             await peer.setLocalDescription(answer);
+            console.info("[VOICE DEBUG] answer audio", peer.localDescription?.sdp?.includes("m=audio"));
             await setDoc(doc(db, "rooms", roomId, "signals", `${firebaseUser.uid}_${signal.from}_answer`), {
               from: firebaseUser.uid,
               to: signal.from,
@@ -156,6 +190,7 @@ export function CallProvider({ children }) {
             if (peer.signalingState !== "have-local-offer") continue;
             await peer.setRemoteDescription({ type: "answer", sdp: signal.sdp });
             processedSignals.current.add(signalKey);
+            console.info("[VOICE DEBUG] received answer audio", signal.sdp.includes("m=audio"));
             const queuedCandidates = pendingCandidates.current.get(signal.from) ?? [];
             await Promise.all(queuedCandidates.map((candidate) => peer.addIceCandidate(candidate)));
             pendingCandidates.current.delete(signal.from);
@@ -217,7 +252,14 @@ export function CallProvider({ children }) {
     setMediaError("");
     setIsConnecting(true);
     try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Seu navegador não oferece acesso ao microfone.");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioTracks = stream.getAudioTracks();
+      console.info("[VOICE DEBUG] local stream", stream.id ? "available" : "missing");
+      console.info("[VOICE DEBUG] audio tracks", audioTracks.length);
+      console.info("[VOICE DEBUG] audio track enabled", audioTracks[0]?.enabled ?? false);
+      console.info("[VOICE DEBUG] audio track readyState", audioTracks[0]?.readyState ?? "missing");
+      if (!audioTracks.length) throw new Error("O microfone não forneceu uma faixa de áudio.");
       if (callToken !== callTokenRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -245,6 +287,8 @@ export function CallProvider({ children }) {
           ? "Permita microfone e câmera para entrar na sala."
           : error.name === "NotFoundError"
             ? "Nenhuma câmera ou microfone disponível neste dispositivo."
+            : error.name === "NotReadableError" || error.name === "SecurityError"
+              ? "Não foi possível acessar o microfone neste dispositivo."
             : error.message,
       );
     }
