@@ -1,9 +1,11 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { CallProvider } from "./contexts/CallContext";
+import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RoomPage from "./pages/RoomPage";
+import WorkspacePage from "./pages/WorkspacePage";
 
 function LoadingScreen() {
   return <main className="loading-screen"><span className="pulse-dot" />Conectando ao Vavagang</main>;
@@ -24,7 +26,16 @@ export default function App() {
     <Routes>
       <Route path="/login" element={firebaseUser ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route element={<ProtectedLayout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route element={<AppShell />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/friends" element={<WorkspacePage section="friends" />} />
+          <Route path="/requests" element={<WorkspacePage section="requests" />} />
+          <Route path="/messages" element={<WorkspacePage section="messages" />} />
+          <Route path="/groups/:groupId" element={<WorkspacePage section="groups" />} />
+          <Route path="/channels/:channelId" element={<WorkspacePage section="channels" />} />
+          <Route path="/voice/:voiceId" element={<WorkspacePage section="voice" />} />
+          <Route path="/settings" element={<WorkspacePage section="settings" />} />
+        </Route>
         <Route path="/room/:roomId" element={<CallProvider><RoomPage /></CallProvider>} />
       </Route>
       <Route path="*" element={<Navigate to={firebaseUser ? "/" : "/login"} replace />} />
