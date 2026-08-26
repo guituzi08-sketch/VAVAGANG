@@ -21,3 +21,10 @@ export async function syncUserProfile(firebaseUser) {
   const savedSnapshot = await getDoc(userRef);
   return savedSnapshot.data();
 }
+
+export async function updateUserProfile(uid, profileChanges) {
+  const userRef = doc(db, "users", uid);
+  await setDoc(userRef, { ...profileChanges, updatedAt: serverTimestamp() }, { merge: true });
+  const snapshot = await getDoc(userRef);
+  return snapshot.data();
+}

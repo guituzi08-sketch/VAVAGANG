@@ -5,6 +5,7 @@ import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RoomPage from "./pages/RoomPage";
+import SettingsPage from "./pages/SettingsPage";
 import WorkspacePage from "./pages/WorkspacePage";
 
 function LoadingScreen() {
@@ -34,7 +35,7 @@ export default function App() {
           <Route path="/groups/:groupId" element={<WorkspacePage section="groups" />} />
           <Route path="/channels/:channelId" element={<WorkspacePage section="channels" />} />
           <Route path="/voice/:voiceId" element={<WorkspacePage section="voice" />} />
-          <Route path="/settings" element={<WorkspacePage section="settings" />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="/room/:roomId" element={<CallProvider><RoomPage /></CallProvider>} />
       </Route>

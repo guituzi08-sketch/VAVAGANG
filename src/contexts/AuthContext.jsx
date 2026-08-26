@@ -1,7 +1,7 @@
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { createContext, useContext, useEffect, useState } from "react";
 import { auth, googleProvider } from "../firebase";
-import { syncUserProfile } from "../services/userService";
+import { syncUserProfile, updateUserProfile } from "../services/userService";
 
 const AuthContext = createContext(null);
 
@@ -61,8 +61,15 @@ export function AuthProvider({ children }) {
     await signOut(auth);
   }
 
+  async function refreshProfile(profileChanges) {
+    if (!firebaseUser) return null;
+    const nextProfile = await updateUserProfile(firebaseUser.uid, profileChanges);
+    setProfile(nextProfile);
+    return nextProfile;
+  }
+
   return (
-    <AuthContext.Provider value={{ firebaseUser, profile, loading, error, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ firebaseUser, profile, loading, error, loginWithGoogle, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
