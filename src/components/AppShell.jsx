@@ -1,4 +1,4 @@
-import { Bell, Compass, Flame, Home, MessageSquare, Plus, Search, Settings, UsersRound } from "lucide-react";
+import { Bell, Camera, Compass, Flame, Home, MessageSquare, Plus, Search, Settings, UsersRound } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -7,6 +7,7 @@ const primaryNavigation = [
   { to: "/friends", label: "Amigos", icon: UsersRound },
   { to: "/messages", label: "Mensagens", icon: MessageSquare },
   { to: "/moments", label: "Moments", icon: Flame },
+  { to: "/vavagram", label: "Vavagram", icon: Camera },
 ];
 
 function NavItem({ item }) {
