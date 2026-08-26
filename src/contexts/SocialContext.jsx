@@ -1,89 +1,78 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
+import { acceptFriendRequest, createFriendRequest, rejectFriendRequest, removeFriend, subscribeToFriendRequests, subscribeToFriends } from "../services/friendService";
+import { createChannel as createFirestoreChannel, createGroup as createFirestoreGroup, deleteChannel as deleteFirestoreChannel, deleteGroup as deleteFirestoreGroup, deleteChannelMessage as deleteFirestoreChannelMessage, editChannelMessage as editFirestoreChannelMessage, sendChannelMessage as sendFirestoreChannelMessage, subscribeToChannelMessages, subscribeToGroupChannels, subscribeToGroups, updateGroup as updateFirestoreGroup } from "../services/communityService";
 
 const SocialContext = createContext(null);
-
-function localId(prefix) {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
 
 export function SocialProvider({ children }) {
   const { firebaseUser, profile } = useAuth();
   const [groups, setGroups] = useState([]);
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [blocked, setBlocked] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [messages, setMessages] = useState({});
+  const [error, setError] = useState("");
 
-  function createGroup({ name, description, privacy }) {
-    const group = { id: localId("group"), name: name.trim(), description: description.trim(), privacy, ownerId: firebaseUser?.uid ?? "local-user", createdAt: new Date(), channels: [{ id: localId("channel"), name: "geral", type: "TEXT", category: "INFORMAÇÕES", messages: [] }] };
-    setGroups((current) => [...current, group]);
-    return group;
+  useEffect(() => {
+    if (!firebaseUser) return undefined;
+    return subscribeToGroups(firebaseUser.uid, setGroups, (snapshotError) => setError(snapshotError.message));
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser) return undefined;
+    const unsubscribeFriends = subscribeToFriends(firebaseUser.uid, setFriends, (snapshotError) => setError(snapshotError.message));
+    const unsubscribeRequests = subscribeToFriendRequests(firebaseUser.uid, setRequests, (snapshotError) => setError(snapshotError.message));
+    return () => { unsubscribeFriends(); unsubscribeRequests(); };
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    const unsubscribers = [];
+    groups.forEach((group) => {
+      unsubscribers.push(subscribeToGroupChannels(group.id, (channels) => {
+        setGroups((current) => current.map((item) => item.id === group.id ? { ...item, channels } : item));
+      }, (snapshotError) => setError(snapshotError.message)));
+    });
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [groups.map((group) => group.id).join(",")]);
+
+  useEffect(() => {
+    const unsubscribers = [];
+    groups.forEach((group) => (group.channels ?? []).forEach((channel) => {
+      unsubscribers.push(subscribeToChannelMessages(group.id, channel.id, (messages) => {
+        setGroups((current) => current.map((item) => item.id === group.id ? { ...item, channels: item.channels.map((entry) => entry.id === channel.id ? { ...entry, messages } : entry) } : item));
+      }, (snapshotError) => setError(snapshotError.message)));
+    }));
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [groups.map((group) => `${group.id}:${(group.channels ?? []).map((channel) => channel.id).join("|")}`).join(",")]);
+
+  async function addFriendRequest(user) {
+    if (!firebaseUser || !user?.uid || user.uid === firebaseUser.uid) return;
+    await createFriendRequest({ ...firebaseUser, ...profile }, user);
+  }
+  async function acceptRequest(request) {
+    const selectedRequest = typeof request === "string" ? requests.find((item) => item.id === request) : request;
+    if (selectedRequest) await acceptFriendRequest(selectedRequest);
+  }
+  async function rejectRequest(requestId) { await rejectFriendRequest(requestId); }
+  async function deleteFriend(friendshipId) { await removeFriend(friendshipId); }
+  async function createGroup(data) { return createFirestoreGroup(data, firebaseUser.uid); }
+  async function updateGroup(groupId, changes) { return updateFirestoreGroup(groupId, changes); }
+  async function deleteGroup(groupId) { return deleteFirestoreGroup(groupId); }
+  async function createChannel(groupId, data) { return createFirestoreChannel(groupId, data); }
+  async function deleteChannel(groupId, channelId) { return deleteFirestoreChannel(groupId, channelId); }
+  async function sendChannelMessage(channelId, text) {
+    const group = groups.find((item) => item.channels?.some((channel) => channel.id === channelId));
+    if (group) await sendFirestoreChannelMessage(group.id, channelId, { ...firebaseUser, ...profile }, text);
+  }
+  async function editChannelMessage(channelId, messageId, text) {
+    const group = groups.find((item) => item.channels?.some((channel) => channel.id === channelId));
+    if (group) await editFirestoreChannelMessage(group.id, channelId, messageId, text);
+  }
+  async function deleteChannelMessage(channelId, messageId) {
+    const group = groups.find((item) => item.channels?.some((channel) => channel.id === channelId));
+    if (group) await deleteFirestoreChannelMessage(group.id, channelId, messageId);
   }
 
-  function updateGroup(groupId, changes) {
-    setGroups((current) => current.map((group) => group.id === groupId ? { ...group, ...changes, updatedAt: new Date() } : group));
-  }
-
-  function deleteGroup(groupId) {
-    setGroups((current) => current.filter((group) => group.id !== groupId));
-  }
-
-  function createChannel(groupId, { name, type, category }) {
-    const channel = { id: localId("channel"), name: name.trim(), type, category: category.trim() || (type === "VOICE" ? "VOZ" : "SOCIAL"), messages: [] };
-    setGroups((current) => current.map((group) => group.id === groupId ? { ...group, channels: [...group.channels, channel] } : group));
-    return channel;
-  }
-
-  function deleteChannel(groupId, channelId) {
-    setGroups((current) => current.map((group) => group.id === groupId ? { ...group, channels: group.channels.filter((channel) => channel.id !== channelId) } : group));
-  }
-
-  function sendChannelMessage(channelId, text) {
-    const cleanText = text.trim();
-    if (!cleanText) return;
-    const message = { id: localId("message"), authorId: firebaseUser?.uid ?? "local-user", authorName: profile?.displayName ?? "Você", text: cleanText, createdAt: new Date(), reactions: [] };
-    setGroups((current) => current.map((group) => ({ ...group, channels: group.channels.map((channel) => channel.id === channelId ? { ...channel, messages: [...channel.messages, message] } : channel) })));
-  }
-
-  function editChannelMessage(channelId, messageId, text) {
-    setGroups((current) => current.map((group) => ({ ...group, channels: group.channels.map((channel) => channel.id === channelId ? { ...channel, messages: channel.messages.map((message) => message.id === messageId ? { ...message, text: text.trim(), edited: true } : message) } : channel) })));
-  }
-
-  function deleteChannelMessage(channelId, messageId) {
-    setGroups((current) => current.map((group) => ({ ...group, channels: group.channels.map((channel) => channel.id === channelId ? { ...channel, messages: channel.messages.filter((message) => message.id !== messageId) } : channel) })));
-  }
-
-  function addFriendRequest(user) {
-    if (!user?.uid || user.uid === firebaseUser?.uid) return;
-    const request = { ...user, id: localId("request"), status: "pending", createdAt: new Date() };
-    setRequests((current) => current.some((item) => item.uid === user.uid) ? current : [...current, request]);
-  }
-
-  function acceptRequest(requestId) {
-    const request = requests.find((item) => item.id === requestId);
-    if (!request) return;
-    setRequests((current) => current.filter((item) => item.id !== requestId));
-    setFriends((current) => [...current, { ...request, status: "online" }]);
-    setNotifications((current) => [{ id: localId("notification"), type: "friend", title: "Nova amizade", text: `${request.displayName} agora está nos seus amigos.`, read: false }, ...current]);
-  }
-
-  function rejectRequest(requestId) { setRequests((current) => current.filter((item) => item.id !== requestId)); }
-  function removeFriend(uid) { setFriends((current) => current.filter((friend) => friend.uid !== uid)); }
-  function blockUser(user) { setBlocked((current) => [...current, user]); removeFriend(user.uid); }
-  function unblockUser(uid) { setBlocked((current) => current.filter((user) => user.uid !== uid)); }
-  function markNotificationRead(id) { setNotifications((current) => current.map((item) => item.id === id ? { ...item, read: true } : item)); }
-  function markAllNotificationsRead() { setNotifications((current) => current.map((item) => ({ ...item, read: true }))); }
-
-  function sendLocalMessage(conversationId, text) {
-    const cleanText = text.trim();
-    if (!cleanText) return;
-    const message = { id: localId("dm"), authorId: firebaseUser?.uid ?? "local-user", authorName: profile?.displayName ?? "Você", text: cleanText, createdAt: new Date() };
-    setMessages((current) => ({ ...current, [conversationId]: [...(current[conversationId] ?? []), message] }));
-  }
-
-  return <SocialContext.Provider value={{ groups, friends, requests, blocked, notifications, messages, createGroup, updateGroup, deleteGroup, createChannel, deleteChannel, sendChannelMessage, editChannelMessage, deleteChannelMessage, addFriendRequest, acceptRequest, rejectRequest, removeFriend, blockUser, unblockUser, markNotificationRead, markAllNotificationsRead, sendLocalMessage }}>
+  return <SocialContext.Provider value={{ groups, friends, requests, blocked: [], notifications: [], error, createGroup, updateGroup, deleteGroup, createChannel, deleteChannel, sendChannelMessage, editChannelMessage, deleteChannelMessage, addFriendRequest, acceptRequest, rejectRequest, removeFriend: deleteFriend, blockUser: async () => {}, unblockUser: async () => {}, markNotificationRead: () => {}, markAllNotificationsRead: () => {} }}>
     {children}
   </SocialContext.Provider>;
 }

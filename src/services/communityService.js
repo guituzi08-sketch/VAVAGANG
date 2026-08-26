@@ -1,0 +1,105 @@
+import {
+  addDoc,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
+export function subscribeToGroups(uid, onChange, onError) {
+  const groupsById = new Map();
+  const emit = () => onChange([...groupsById.values()].sort((first, second) => (second.createdAt?.seconds ?? 0) - (first.createdAt?.seconds ?? 0)));
+  const subscribe = (groupsQuery) => onSnapshot(groupsQuery, (snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === "removed") groupsById.delete(change.doc.id);
+      else groupsById.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+    });
+    emit();
+  }, onError);
+  const unsubscribePublic = subscribe(query(collection(db, "groups"), where("privacy", "==", "public")));
+  const unsubscribePrivate = subscribe(query(collection(db, "groups"), where("memberIds", "array-contains", uid)));
+  return () => { unsubscribePublic(); unsubscribePrivate(); };
+}
+
+export function subscribeToGroupChannels(groupId, onChange, onError) {
+  return onSnapshot(query(collection(db, "groups", groupId, "channels"), orderBy("createdAt", "asc")), (snapshot) => {
+    onChange(snapshot.docs.map((channel) => ({ id: channel.id, ...channel.data(), messages: [] })));
+  }, onError);
+}
+
+export function subscribeToChannelMessages(groupId, channelId, onChange, onError) {
+  return onSnapshot(query(collection(db, "groups", groupId, "channels", channelId, "messages"), orderBy("createdAt", "asc")), (snapshot) => {
+    onChange(snapshot.docs.map((message) => ({ id: message.id, ...message.data() })));
+  }, onError);
+}
+
+export async function createGroup({ name, description, privacy }, uid) {
+  const groupRef = await addDoc(collection(db, "groups"), {
+    name: name.trim(),
+    description: description.trim(),
+    privacy,
+    ownerId: uid,
+    memberIds: [uid],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await addDoc(collection(db, "groups", groupRef.id, "channels"), {
+    name: "geral",
+    type: "TEXT",
+    category: "INFORMAÇÕES",
+    createdAt: serverTimestamp(),
+  });
+  return groupRef.id;
+}
+
+export async function updateGroup(groupId, changes) {
+  await updateDoc(doc(db, "groups", groupId), { ...changes, updatedAt: serverTimestamp() });
+}
+
+export async function deleteGroup(groupId) {
+  await deleteDoc(doc(db, "groups", groupId));
+}
+
+export async function createChannel(groupId, { name, type, category }) {
+  const channelRef = await addDoc(collection(db, "groups", groupId, "channels"), {
+    name: name.trim(),
+    type,
+    category: category.trim() || (type === "VOICE" ? "VOZ" : "SOCIAL"),
+    createdAt: serverTimestamp(),
+  });
+  return channelRef.id;
+}
+
+export async function deleteChannel(groupId, channelId) {
+  await deleteDoc(doc(db, "groups", groupId, "channels", channelId));
+}
+
+export async function sendChannelMessage(groupId, channelId, user, text) {
+  const cleanText = text.trim();
+  if (!cleanText) return;
+  await addDoc(collection(db, "groups", groupId, "channels", channelId, "messages"), {
+    authorId: user.uid,
+    authorName: user.nickname || user.displayName || "Usuário",
+    text: cleanText,
+    createdAt: serverTimestamp(),
+    edited: false,
+  });
+}
+
+export async function editChannelMessage(groupId, channelId, messageId, text) {
+  await updateDoc(doc(db, "groups", groupId, "channels", channelId, "messages", messageId), { text: text.trim(), edited: true });
+}
+
+export async function deleteChannelMessage(groupId, channelId, messageId) {
+  await deleteDoc(doc(db, "groups", groupId, "channels", channelId, "messages", messageId));
+}
+
+export async function addMemberToGroup(groupId, uid) {
+  await updateDoc(doc(db, "groups", groupId), { memberIds: arrayUnion(uid) });
+}

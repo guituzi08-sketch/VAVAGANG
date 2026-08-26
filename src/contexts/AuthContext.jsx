@@ -1,4 +1,4 @@
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
 import { createContext, useContext, useEffect, useState } from "react";
 import { auth, googleProvider } from "../firebase";
 import { setUserPresence, syncUserProfile, updateUserProfile } from "../services/userService";
@@ -58,6 +58,26 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function loginWithEmail(email, password) {
+    setError("");
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (loginError) {
+      setError(formatAuthError(loginError));
+      return null;
+    }
+  }
+
+  async function registerWithEmail(email, password) {
+    setError("");
+    try {
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
+    } catch (registerError) {
+      setError(formatAuthError(registerError));
+      return null;
+    }
+  }
+
   async function logout() {
     if (firebaseUser) await setUserPresence(firebaseUser.uid, "offline");
     await signOut(auth);
@@ -71,10 +91,20 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, profile, loading, error, loginWithGoogle, logout, refreshProfile }}>
+    <AuthContext.Provider value={{ firebaseUser, profile, loading, error, loginWithGoogle, loginWithEmail, registerWithEmail, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+function formatAuthError(authError) {
+  const messages = {
+    "auth/invalid-credential": "E-mail ou senha inválidos.",
+    "auth/email-already-in-use": "Este e-mail já está cadastrado.",
+    "auth/weak-password": "A senha precisa ter pelo menos 6 caracteres.",
+    "auth/invalid-email": "Informe um e-mail válido.",
+  };
+  return messages[authError.code] ?? authError.message;
 }
 
 export function useAuth() {
