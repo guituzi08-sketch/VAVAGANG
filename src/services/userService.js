@@ -58,6 +58,11 @@ export function normalizeUserSearch(value) {
   return value.trim().replace(/^@/, "").toLowerCase();
 }
 
+export async function getUserProfile(uid) {
+  const snapshot = await getDoc(doc(db, "users", uid));
+  return snapshot.exists() ? { uid, ...snapshot.data() } : { uid };
+}
+
 export async function searchUsers(searchValue) {
   const normalized = normalizeUserSearch(searchValue);
   if (!normalized) return [];

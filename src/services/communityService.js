@@ -6,6 +6,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -15,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { createNotification } from "./notificationService";
+import { normalizeUserSearch } from "./userService";
 
 export function subscribeToGroups(uid, onChange, onError) {
   const groupsById = new Map();
@@ -95,6 +97,13 @@ export async function sendChannelMessage(groupId, channelId, user, text) {
     createdAt: serverTimestamp(),
     edited: false,
   });
+  const groupSnapshot = await getDoc(doc(db, "groups", groupId));
+  const channelSnapshot = await getDoc(doc(db, "groups", groupId, "channels", channelId));
+  const group = groupSnapshot.data() ?? {}; const channel = channelSnapshot.data() ?? {};
+  await Promise.all((group.memberIds ?? []).filter((uid) => uid !== user.uid).map((uid) => createNotification({ recipientId: uid, senderId: user.uid, type: "channel_message", title: `Nova mensagem em #${channel.name ?? "canal"}`, message: `${user.nickname || user.displayName || "Usuário"} enviou uma mensagem.`, metadata: { groupId, channelId } })));
+  const mentions = [...cleanText.matchAll(/@([a-zA-Z0-9_.]{3,24})/g)].map((match) => normalizeUserSearch(match[1]));
+  const mentionedUsers = await Promise.all([...new Set(mentions)].map((nicknameNormalized) => getDocs(query(collection(db, "users"), where("nicknameNormalized", "==", nicknameNormalized), limit(5)))));
+  await Promise.all(mentionedUsers.flatMap((snapshot) => snapshot.docs.map((item) => item.id)).filter((uid, index, all) => uid !== user.uid && all.indexOf(uid) === index).map((uid) => createNotification({ recipientId: uid, senderId: user.uid, type: "mention", title: `Você foi mencionado em #${channel.name ?? "canal"}`, message: `${user.nickname || user.displayName || "Usuário"} mencionou você.`, metadata: { groupId, channelId } })));
 }
 
 export async function editChannelMessage(groupId, channelId, messageId, text) {
