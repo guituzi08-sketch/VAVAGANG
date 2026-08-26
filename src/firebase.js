@@ -29,11 +29,16 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
 };
 
-if (import.meta.env.PROD && firebaseConfig.projectId !== "vava-post") {
-  throw new Error("Projeto Firebase de produção inválido.");
+if (import.meta.env.PROD && (firebaseConfig.projectId !== "vava-post" || firebaseConfig.authDomain !== "vava-post.firebaseapp.com")) {
+  throw new Error("Configuração Firebase de produção inválida.");
 }
 
-export const app = getApps()[0] ?? initializeApp(firebaseConfig);
+const existingApp = getApps()[0];
+if (existingApp && (existingApp.options.projectId !== "vava-post" || existingApp.options.authDomain !== "vava-post.firebaseapp.com")) {
+  throw new Error("Existe uma instância Firebase incompatível.");
+}
+
+export const app = existingApp ?? initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
