@@ -20,7 +20,7 @@ function SocialHeader({ eyebrow, title, description, action }) {
 }
 
 function FriendsView() {
-  const { friends, requests, addFriendRequest, acceptRequest, rejectRequest, removeFriend, blockUser, blocked } = useSocial();
+  const { friends, requests, addFriendRequest, acceptRequest, rejectRequest, removeFriend, blockUser, unblockUser, blocked } = useSocial();
   const [tab, setTab] = useState("Todos");
   const [query, setQuery] = useState("");
   const visibleFriends = friends.filter((friend) => tab === "Online" ? friend.status === "online" : tab === "Todos");
@@ -34,8 +34,8 @@ function PersonRow({ person, children }) {
 }
 
 function NotificationsView() {
-  const { notifications, requests, markNotificationRead, markAllNotificationsRead } = useSocial();
-  return <div className="social-content"><SocialHeader eyebrow="Central" title="Notificações" description="Solicitações e eventos importantes do seu espaço." action={<button className="secondary-button" onClick={markAllNotificationsRead}>Marcar todas como lidas</button>} /><div className="social-list notification-list">{requests.map((request) => <article className="notification-row" key={request.id}><Bell size={18} /><div><strong>Nova solicitação de amizade</strong><span>{request.displayName} quer adicionar você.</span></div><button className="small-action">Ver</button></article>)}{notifications.map((notification) => <article className={`notification-row ${notification.read ? "read" : ""}`} key={notification.id}><Bell size={18} /><div><strong>{notification.title}</strong><span>{notification.text}</span></div>{!notification.read && <button className="small-action" onClick={() => markNotificationRead(notification.id)}>Marcar como lida</button>}</article>)}{requests.length === 0 && notifications.length === 0 && <EmptyLine text="Nenhuma notificação por enquanto." />}</div></div>;
+  const { notifications, requests, invites, respondInvite, markNotificationRead, markAllNotificationsRead } = useSocial();
+  return <div className="social-content"><SocialHeader eyebrow="Central" title="Notificações" description="Solicitações e eventos importantes do seu espaço." action={<button className="secondary-button" onClick={markAllNotificationsRead}>Marcar todas como lidas</button>} /><div className="social-list notification-list">{requests.map((request) => <article className="notification-row" key={request.id}><Bell size={18} /><div><strong>Nova solicitação de amizade</strong><span>{request.senderName} quer adicionar você.</span></div><button className="small-action">Ver</button></article>)}{invites.map((invite) => <article className="notification-row" key={invite.id}><Bell size={18} /><div><strong>Convite para grupo</strong><span>{invite.senderName} convidou você.</span></div><button className="small-action" onClick={() => respondInvite(invite, true)}>Aceitar</button><button className="small-action muted-action" onClick={() => respondInvite(invite, false)}>Recusar</button></article>)}{notifications.map((notification) => <article className={`notification-row ${notification.read ? "read" : ""}`} key={notification.id}><Bell size={18} /><div><strong>{notification.title}</strong><span>{notification.message}</span></div>{!notification.read && <button className="small-action" onClick={() => markNotificationRead(notification.id)}>Marcar como lida</button>}</article>)}{requests.length === 0 && invites.length === 0 && notifications.length === 0 && <EmptyLine text="Nenhuma notificação por enquanto." />}</div></div>;
 }
 
 function SearchView() {

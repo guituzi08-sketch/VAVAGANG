@@ -4,13 +4,16 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { createNotification } from "./notificationService";
 
 export function subscribeToGroups(uid, onChange, onError) {
   const groupsById = new Map();
@@ -102,4 +105,22 @@ export async function deleteChannelMessage(groupId, channelId, messageId) {
 
 export async function addMemberToGroup(groupId, uid) {
   await updateDoc(doc(db, "groups", groupId), { memberIds: arrayUnion(uid) });
+}
+
+export function subscribeToGroupInvites(uid, onChange, onError) {
+  return onSnapshot(query(collection(db, "groupInvites"), where("recipientId", "==", uid), where("status", "==", "pending")), (snapshot) => onChange(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), onError);
+}
+
+export async function inviteToGroup(groupId, sender, recipient) {
+  const invites = collection(db, "groupInvites");
+  const existing = await getDocs(query(invites, where("groupId", "==", groupId), where("recipientId", "==", recipient.uid), where("status", "==", "pending")));
+  if (!existing.empty) return false;
+  const invite = await addDoc(invites, { groupId, senderId: sender.uid, recipientId: recipient.uid, senderName: sender.nickname || sender.displayName || "Usuário", status: "pending", createdAt: serverTimestamp() });
+  await createNotification({ recipientId: recipient.uid, senderId: sender.uid, type: "group_invite", title: "Convite para grupo", message: `${sender.nickname || sender.displayName || "Usuário"} convidou você para um grupo.`, metadata: { groupId, inviteId: invite.id } });
+  return invite.id;
+}
+
+export async function respondToGroupInvite(invite, accepted) {
+  await updateDoc(doc(db, "groupInvites", invite.id), { status: accepted ? "accepted" : "declined", respondedAt: serverTimestamp() });
+  if (accepted) await addMemberToGroup(invite.groupId, invite.recipientId);
 }

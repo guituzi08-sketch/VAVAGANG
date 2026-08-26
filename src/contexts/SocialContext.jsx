@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
-import { acceptFriendRequest, createFriendRequest, rejectFriendRequest, removeFriend, subscribeToFriendRequests, subscribeToFriends } from "../services/friendService";
-import { createChannel as createFirestoreChannel, createGroup as createFirestoreGroup, deleteChannel as deleteFirestoreChannel, deleteGroup as deleteFirestoreGroup, deleteChannelMessage as deleteFirestoreChannelMessage, editChannelMessage as editFirestoreChannelMessage, sendChannelMessage as sendFirestoreChannelMessage, subscribeToChannelMessages, subscribeToGroupChannels, subscribeToGroups, updateGroup as updateFirestoreGroup } from "../services/communityService";
+import { acceptFriendRequest, blockUser as blockFirestoreUser, createFriendRequest, isBlocked, rejectFriendRequest, removeFriend, subscribeToBlocks, subscribeToFriendRequests, subscribeToFriends, unblockUser as unblockFirestoreUser } from "../services/friendService";
+import { markAllNotificationsRead as markAllFirestoreNotificationsRead, markNotificationRead as markFirestoreNotificationRead, subscribeToNotifications } from "../services/notificationService";
+import { createChannel as createFirestoreChannel, createGroup as createFirestoreGroup, deleteChannel as deleteFirestoreChannel, deleteGroup as deleteFirestoreGroup, deleteChannelMessage as deleteFirestoreChannelMessage, editChannelMessage as editFirestoreChannelMessage, inviteToGroup, respondToGroupInvite, sendChannelMessage as sendFirestoreChannelMessage, subscribeToChannelMessages, subscribeToGroupChannels, subscribeToGroupInvites, subscribeToGroups, updateGroup as updateFirestoreGroup } from "../services/communityService";
 
 const SocialContext = createContext(null);
 
@@ -11,10 +12,21 @@ export function SocialProvider({ children }) {
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
   const [error, setError] = useState("");
+  const [blocked, setBlocked] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [invites, setInvites] = useState([]);
 
   useEffect(() => {
     if (!firebaseUser) return undefined;
     return subscribeToGroups(firebaseUser.uid, setGroups, (snapshotError) => setError(snapshotError.message));
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser) return undefined;
+    const unsubscribeBlocks = subscribeToBlocks(firebaseUser.uid, setBlocked, (snapshotError) => setError(snapshotError.message));
+    const unsubscribeNotifications = subscribeToNotifications(firebaseUser.uid, setNotifications, (snapshotError) => setError(snapshotError.message));
+    const unsubscribeInvites = subscribeToGroupInvites(firebaseUser.uid, setInvites, (snapshotError) => setError(snapshotError.message));
+    return () => { unsubscribeBlocks(); unsubscribeNotifications(); unsubscribeInvites(); };
   }, [firebaseUser]);
 
   useEffect(() => {
@@ -45,7 +57,9 @@ export function SocialProvider({ children }) {
   }, [groups.map((group) => `${group.id}:${(group.channels ?? []).map((channel) => channel.id).join("|")}`).join(",")]);
 
   async function addFriendRequest(user) {
+    if (user?.blockedUid && user?.id) { await unblockFirestoreUser(user.id); return; }
     if (!firebaseUser || !user?.uid || user.uid === firebaseUser.uid) return;
+    if (await isBlocked(firebaseUser.uid, user.uid)) throw new Error("Esta interação está bloqueada.");
     await createFriendRequest({ ...firebaseUser, ...profile }, user);
   }
   async function acceptRequest(request) {
@@ -54,6 +68,10 @@ export function SocialProvider({ children }) {
   }
   async function rejectRequest(requestId) { await rejectFriendRequest(requestId); }
   async function deleteFriend(friendshipId) { await removeFriend(friendshipId); }
+  async function blockUser(user) { await blockFirestoreUser(firebaseUser.uid, user.uid); }
+  async function unblockUser(blockId) { await unblockFirestoreUser(blockId); }
+  async function respondInvite(invite, accepted) { await respondToGroupInvite(invite, accepted); }
+  async function inviteUser(groupId, user) { return inviteToGroup(groupId, { ...firebaseUser, ...profile }, user); }
   async function createGroup(data) { return createFirestoreGroup(data, firebaseUser.uid); }
   async function updateGroup(groupId, changes) { return updateFirestoreGroup(groupId, changes); }
   async function deleteGroup(groupId) { return deleteFirestoreGroup(groupId); }
@@ -72,7 +90,7 @@ export function SocialProvider({ children }) {
     if (group) await deleteFirestoreChannelMessage(group.id, channelId, messageId);
   }
 
-  return <SocialContext.Provider value={{ groups, friends, requests, blocked: [], notifications: [], error, createGroup, updateGroup, deleteGroup, createChannel, deleteChannel, sendChannelMessage, editChannelMessage, deleteChannelMessage, addFriendRequest, acceptRequest, rejectRequest, removeFriend: deleteFriend, blockUser: async () => {}, unblockUser: async () => {}, markNotificationRead: () => {}, markAllNotificationsRead: () => {} }}>
+  return <SocialContext.Provider value={{ groups, friends, requests, invites, blocked, notifications, error, createGroup, updateGroup, deleteGroup, createChannel, deleteChannel, sendChannelMessage, editChannelMessage, deleteChannelMessage, addFriendRequest, acceptRequest, rejectRequest, removeFriend: deleteFriend, blockUser, unblockUser, inviteUser, respondInvite, markNotificationRead: markFirestoreNotificationRead, markAllNotificationsRead: () => markAllFirestoreNotificationsRead(notifications) }}>
     {children}
   </SocialContext.Provider>;
 }
