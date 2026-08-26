@@ -4,7 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocial } from "../contexts/SocialContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
-import { createFriendRequest } from "../services/friendService";
 import { getUserProfile, searchUsers } from "../services/userService";
 import { changeMemberRole, inviteToGroup, removeMemberFromGroup } from "../services/communityService";
 
@@ -41,7 +40,8 @@ function NotificationsView() {
 
 function SearchView() {
   const [query, setQuery] = useState("");
-  const { firebaseUser, profile } = useAuth();
+  const { firebaseUser } = useAuth();
+  const { addFriendRequest } = useSocial();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,7 +62,7 @@ function SearchView() {
     return () => window.clearTimeout(timer);
   }, [query, firebaseUser?.uid]);
   async function addFriend(user) {
-    try { await createFriendRequest(firebaseUser, user); setSentRequests((current) => ({ ...current, [user.uid]: true })); } catch (requestError) { setError(requestError.code === "permission-denied" ? "Você não tem permissão para enviar esta solicitação." : "Não foi possível enviar a solicitação. Tente novamente."); }
+    try { await addFriendRequest(user); setSentRequests((current) => ({ ...current, [user.uid]: true })); } catch (requestError) { setError(requestError.code === "permission-denied" ? "Você não tem permissão para enviar esta solicitação." : requestError.message || "Não foi possível enviar a solicitação. Tente novamente."); }
   }
   return <div className="social-content"><SocialHeader eyebrow="Explorar" title="Pesquisar usuários" description="Encontre pessoas por nome, username ou @username." /><div className="global-search-large"><Search size={20} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar usuário ou @username" /></div><div className="search-categories"><span>Usuários</span><span>Grupos</span><span>Canais</span><span>Mensagens</span></div>{loading && <p className="search-status">Procurando usuários...</p>}{error && <p className="error-message">{error}</p>}{!loading && !error && query.trim() && results.length === 0 && <div className="workspace-empty"><Search size={24} /><h2>Nenhum usuário encontrado.</h2><p>Confira o nome ou username e tente novamente.</p></div>}{!loading && results.length > 0 && <div className="social-list">{results.map((user) => <article className="person-row" key={user.uid}><div className="avatar avatar-fallback">{user.photoURL ? <img className="avatar" src={user.photoURL} alt="" /> : user.displayName?.[0] ?? "?"}</div><div><strong>{user.displayName ?? "Usuário"}</strong><span>@{user.username ?? "username"} · <i className="online-label">{user.presenceStatus === "online" ? "Online" : "Offline"}</i></span></div><div className="person-actions"><button className="small-action" disabled={sentRequests[user.uid]} onClick={() => addFriend(user)}>{sentRequests[user.uid] ? "Solicitação enviada" : "Adicionar amigo"}</button></div></article>)}</div>}</div>;
 }
