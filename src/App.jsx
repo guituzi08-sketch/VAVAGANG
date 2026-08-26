@@ -12,6 +12,7 @@ import SettingsPage from "./pages/SettingsPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import MomentsPage from "./pages/MomentsPage";
 import VavagramPage from "./pages/VavagramPage";
+import VavaXPage from "./pages/VavaXPage";
 
 function LoadingScreen() {
   return <main className="loading-screen"><span className="pulse-dot" />Conectando ao Vavagang</main>;
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/search" element={<WorkspacePage section="search" />} />
           <Route path="/moments" element={<MomentsPage />} />
           <Route path="/vavagram" element={<VavagramPage />} />
+          <Route path="/vavax" element={<VavaXPage />} />
           <Route path="/groups/:groupId" element={<WorkspacePage section="groups" />} />
           <Route path="/groups" element={<WorkspacePage section="groups" />} />
           <Route path="/channels/:channelId" element={<WorkspacePage section="channels" />} />

@@ -1,4 +1,4 @@
-import { Bell, Camera, Compass, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Settings, UsersRound } from "lucide-react";
+import { AtSign, Bell, Camera, Compass, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Settings, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -14,6 +14,7 @@ const primaryNavigation = [
   { to: "/friends", label: "Amigos", icon: UsersRound },
   { to: "/requests", label: "Notificações", icon: Bell },
   { to: "/moments", label: "Moments", icon: Flame },
+  { to: "/vavax", label: "VavaX", icon: AtSign },
   { to: "/settings", label: "Configurações", icon: Settings },
 ];
 
