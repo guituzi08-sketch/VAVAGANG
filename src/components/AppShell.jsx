@@ -39,9 +39,15 @@ export default function AppShell() {
       {inCommunity ? <CommunityNavigation /> : <HomeNavigation />}
       <div className="navigation-footer"><div className="footer-user"><div className="avatar avatar-fallback">{profile?.displayName?.[0] ?? "V"}</div><div><strong>{profile?.displayName ?? "Usuário"}</strong><span>online</span></div></div><NavLink className="icon-button" to="/settings" title="Configurações"><Settings size={16} /></NavLink></div>
     </aside>
-    <section className="workspace-main"><Outlet /></section>
+      <section className="workspace-main"><Outlet /></section>
+      <ContextPanel />
   </div>;
 }
+
+  function ContextPanel() {
+    const { profile } = useAuth();
+    return <aside className="context-panel" aria-label="Painel contextual"><div className="context-heading"><span>Seu espaço</span><span className="context-live">● online</span></div><div className="context-profile"><div className="avatar avatar-fallback avatar-context">{profile?.displayName?.[0] ?? "V"}</div><strong>{profile?.displayName ?? "Usuário"}</strong><span>{profile?.email ?? ""}</span></div><div className="context-section"><span className="nav-caption">Amigos online</span><p>Nenhum amigo online ainda.</p></div><div className="context-section"><span className="nav-caption">Atividade recente</span><p>Suas atividades aparecerão aqui quando você começar a usar o Vavagang.</p></div></aside>;
+  }
 
 function HomeNavigation() {
   return <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} />)}<div className="nav-divider" /><NavItem item={{ to: "/requests", label: "Solicitações", icon: Bell }} /><span className="nav-caption">Atividade</span><p className="navigation-empty">Suas comunidades e grupos aparecerão aqui quando você entrar.</p></nav>;
