@@ -67,7 +67,7 @@ export async function triggerSoundEffect(roomId, user, effectId) {
 }
 
 export async function removeSoundEffect(roomId, effect) {
-  await deleteDoc(doc(db, "rooms", roomId, "soundEffects", effect.id));
   const { error } = await supabase.storage.from(BUCKET).remove([effect.storagePath]);
   if (error) throw error;
+  await deleteDoc(doc(db, "rooms", roomId, "soundEffects", effect.id));
 }

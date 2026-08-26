@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
-import { subscribeToSoundEffectEvents, subscribeToSoundEffects, triggerSoundEffect, uploadSoundEffect } from "../services/soundEffectService";
+import { removeSoundEffect, subscribeToSoundEffectEvents, subscribeToSoundEffects, triggerSoundEffect, uploadSoundEffect } from "../services/soundEffectService";
 
 const SoundEffectsContext = createContext(null);
 
@@ -59,7 +59,18 @@ export function SoundEffectsProvider({ children }) {
       }
     }
 
-    return { effects, error: roomError || error, audioBlocked, setAudioBlocked, trigger, upload };
+    async function remove(effect) {
+      setError("");
+      try {
+        await removeSoundEffect(roomId, effect);
+        audioCache.current.delete(effect.id);
+      } catch (removeError) {
+        setError(removeError.message);
+        throw removeError;
+      }
+    }
+
+    return { effects, error: roomError || error, audioBlocked, setAudioBlocked, trigger, upload, remove };
   }
 
   return <SoundEffectsContext.Provider value={{ useRoomSoundEffects }}>{children}</SoundEffectsContext.Provider>;

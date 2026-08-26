@@ -6,7 +6,7 @@
 2. Ative Google em **Authentication > Sign-in method**.
 3. Crie o Firestore Database e publique as regras versionadas em `firestore.rules`.
 4. Adicione `localhost` e o domínio de produção em **Authentication > Settings > Authorized domains**.
-5. No Supabase, mantenha o bucket público `sound-effects` e crie policies de Storage para permitir upload no bucket. Como o login do app é Firebase, a policy não recebe automaticamente o usuário como `authenticated`; para restringir uploads por usuário, use um endpoint backend com a service role, nunca no frontend.
+5. No Supabase, mantenha o bucket público `sound-effects` e crie policies de Storage para permitir `INSERT` e `DELETE` no bucket. Como o login do app é Firebase, a policy não recebe automaticamente o usuário como `authenticated`; para restringir uploads por usuário, use um endpoint backend com a service role, nunca no frontend.
 6. Execute:
 
 ```bash
