@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   increment,
   onSnapshot,
@@ -65,4 +66,16 @@ export async function leaveRoom(roomId, uid) {
     transaction.delete(participantRef);
     transaction.update(roomRef, { participantCount: increment(-1) });
   });
+}
+
+export function subscribeToMomentReactions(roomId, onChange, onError) {
+  return onSnapshot(collection(db, "rooms", roomId, "reactions"), (snapshot) => {
+    const now = Date.now();
+    onChange(snapshot.docs.map((reaction) => ({ id: reaction.id, ...reaction.data() })).filter((reaction) => !reaction.expiresAt || reaction.expiresAt > now));
+  }, onError);
+}
+
+export async function addMomentReaction(roomId, uid, emoji) {
+  const reactionRef = await addDoc(collection(db, "rooms", roomId, "reactions"), { uid, emoji, createdAt: Date.now(), expiresAt: Date.now() + 8000 });
+  window.setTimeout(() => deleteDoc(reactionRef).catch(() => {}), 8000);
 }

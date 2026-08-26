@@ -43,6 +43,13 @@ service cloud.firestore {
           && request.resource.data.to != request.auth.uid;
         allow delete: if signedIn() && resource.data.from == request.auth.uid;
       }
+
+      match /reactions/{reactionId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+        allow update: if false;
+      }
     }
   }
 }
