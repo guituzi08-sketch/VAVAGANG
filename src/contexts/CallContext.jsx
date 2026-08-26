@@ -88,7 +88,23 @@ export function CallProvider({ children }) {
   }
 
   async function createPeer(remoteUid, shouldOffer) {
-    if (peers.current.has(remoteUid)) return peers.current.get(remoteUid);
+    const existingPeer = peers.current.get(remoteUid);
+    if (existingPeer) {
+      if (shouldOffer && !existingPeer.localDescription && !existingPeer.offerPromise) {
+        existingPeer.offerPromise = (async () => {
+          const offer = await existingPeer.createOffer();
+          await existingPeer.setLocalDescription(offer);
+          await setDoc(doc(db, "rooms", roomIdRef.current, "signals", `${firebaseUser.uid}_${remoteUid}_offer`), {
+            from: firebaseUser.uid,
+            to: remoteUid,
+            type: "offer",
+            sdp: offer.sdp,
+          });
+        })();
+        await existingPeer.offerPromise;
+      }
+      return existingPeer;
+    }
     const roomId = roomIdRef.current;
     const peer = new RTCPeerConnection(rtcConfig);
     peers.current.set(remoteUid, peer);
@@ -103,8 +119,7 @@ export function CallProvider({ children }) {
     console.info("[VOICE DEBUG] audio tracks", localStreamRef.current?.getAudioTracks().length ?? 0);
     console.info("[VOICE DEBUG] audio track", { enabled: audioTrack?.enabled ?? false, readyState: audioTrack?.readyState ?? "missing" });
     console.info("[VOICE DEBUG] audio sender exists", Boolean(audioSender));
-    const localAudioTrack = localStreamRef.current?.getAudioTracks()[0];
-    if (!audioSender && localAudioTrack) throw new Error("Não foi possível adicionar o microfone à PeerConnection.");
+    if (!audioSender && audioTrack) throw new Error("Não foi possível adicionar o microfone à PeerConnection.");
     if (screenStreamRef.current) {
       await videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null);
       await screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null);
@@ -141,15 +156,18 @@ export function CallProvider({ children }) {
     };
 
     if (shouldOffer) {
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      console.info("[VOICE DEBUG] offer audio", peer.localDescription?.sdp?.includes("m=audio"));
-      await setDoc(doc(db, "rooms", roomId, "signals", `${firebaseUser.uid}_${remoteUid}_offer`), {
-        from: firebaseUser.uid,
-        to: remoteUid,
-        type: "offer",
-        sdp: offer.sdp,
-      });
+      peer.offerPromise = (async () => {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        console.info("[VOICE DEBUG] offer audio", peer.localDescription?.sdp?.includes("m=audio"));
+        await setDoc(doc(db, "rooms", roomId, "signals", `${firebaseUser.uid}_${remoteUid}_offer`), {
+          from: firebaseUser.uid,
+          to: remoteUid,
+          type: "offer",
+          sdp: offer.sdp,
+        });
+      })();
+      await peer.offerPromise;
     }
     return peer;
   }

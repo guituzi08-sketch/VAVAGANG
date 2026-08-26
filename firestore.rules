@@ -6,6 +6,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function canAccessRoom(roomId) {
+      return signedIn()
+        && (get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid
+          || exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)));
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == userId;
@@ -196,6 +202,26 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
         allow delete: if signedIn() && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid);
         allow update: if false;
+      }
+
+      match /soundEffects/{effectId} {
+        allow read: if canAccessRoom(roomId);
+        allow create: if canAccessRoom(roomId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.keys().hasAll(['name', 'storagePath', 'publicUrl', 'mimeType', 'size', 'createdBy', 'createdAt'])
+          && request.resource.data.size <= 10485760;
+        allow delete: if canAccessRoom(roomId)
+          && (resource.data.createdBy == request.auth.uid
+            || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid);
+        allow update: if false;
+      }
+
+      match /soundEffectEvents/{eventId} {
+        allow read: if canAccessRoom(roomId);
+        allow create: if canAccessRoom(roomId)
+          && request.resource.data.triggeredBy == request.auth.uid
+          && request.resource.data.keys().hasAll(['effectId', 'triggeredBy', 'triggeredAt']);
+        allow update, delete: if false;
       }
     }
   }

@@ -3,6 +3,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { CallProvider } from "./contexts/CallContext";
 import { DirectMessageProvider } from "./contexts/DirectMessageContext";
 import { SocialProvider } from "./contexts/SocialContext";
+import { SoundEffectsProvider } from "./contexts/SoundEffectsContext";
 import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -20,7 +21,7 @@ function ProtectedLayout() {
   const { firebaseUser, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
-  return <SocialProvider><DirectMessageProvider><CallProvider><Outlet /></CallProvider></DirectMessageProvider></SocialProvider>;
+  return <SocialProvider><DirectMessageProvider><CallProvider><SoundEffectsProvider><Outlet /></SoundEffectsProvider></CallProvider></DirectMessageProvider></SocialProvider>;
 }
 
 export default function App() {

@@ -2,18 +2,19 @@
 
 ## Desenvolvimento
 
-1. Copie `.env.example` para `.env` e preencha as variáveis com a configuração do projeto Firebase autorizado.
+1. Copie `.env.example` para `.env` e preencha as variáveis com a configuração do projeto Firebase autorizado e a publishable key do projeto Supabase `vavacallstorage`.
 2. Ative Google em **Authentication > Sign-in method**.
 3. Crie o Firestore Database e publique as regras versionadas em `firestore.rules`.
 4. Adicione `localhost` e o domínio de produção em **Authentication > Settings > Authorized domains**.
-5. Execute:
+5. No Supabase, mantenha o bucket público `sound-effects` e crie policies de Storage para permitir upload no bucket. Como o login do app é Firebase, a policy não recebe automaticamente o usuário como `authenticated`; para restringir uploads por usuário, use um endpoint backend com a service role, nunca no frontend.
+6. Execute:
 
 ```bash
 npm install
 npm run dev
 ```
 
-O app usa Authentication, Firestore e WebRTC diretamente no navegador. Câmera, microfone e compartilhamento de tela exigem HTTPS em produção ou `localhost` em desenvolvimento.
+O app usa Authentication, Firestore, Supabase Storage e WebRTC diretamente no navegador. Câmera, microfone e compartilhamento de tela exigem HTTPS em produção ou `localhost` em desenvolvimento. Os efeitos sonoros usam o Firestore apenas para metadados e eventos; o áudio é reproduzido localmente e não passa pelo WebRTC.
 
 ## GitHub Pages
 
@@ -21,13 +22,15 @@ O repositório `guituzi08-sketch/VAVAGANG` é um site de projeto. A URL final se
 
 `https://guituzi08-sketch.github.io/VAVAGANG/`
 
-O workflow em `.github/workflows/main.yml` instala com `npm ci`, executa `npm run build` e publica `dist`. Antes do primeiro push, cadastre os cinco valores do `.env` como **Settings > Secrets and variables > Actions > New repository secret**, usando os nomes `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID` e `VITE_FIREBASE_APP_ID`.
+O workflow em `.github/workflows/main.yml` instala com `npm ci`, executa `npm run build` e publica `dist`. Antes do primeiro push, cadastre os valores do `.env` como secrets, usando os nomes Firebase já listados e também `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
 Depois, em **Settings > Pages**, selecione **Source: GitHub Actions**. Faça push para `main` e acompanhe a execução na aba **Actions**. O domínio `guituzi08-sketch.github.io` também deve estar autorizado no Firebase Authentication.
 
 ## Estrutura
 
-- `src/firebase.js`: inicialização do Firebase Web SDK por variáveis de ambiente. O app utiliza Authentication e Firestore; não inicializa Firebase Storage.
+- `src/firebase.js`: inicialização do Firebase Web SDK por variáveis de ambiente.
+- `src/supabase.js`: cliente Supabase Storage usando apenas valores públicos do frontend.
+- `src/contexts/SoundEffectsContext.jsx`: lista, reproduz e publica efeitos sonoros compartilhados.
 - `src/contexts/AuthContext.jsx`: sessão Google e sincronização de perfil.
 - `src/contexts/CallContext.jsx`: mídia local, peers e sinalização Firestore.
 - `src/services/`: operações de usuários e salas.
