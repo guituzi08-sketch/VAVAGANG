@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /rooms/{roomId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if signedIn()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
+        && request.resource.data.participantCount >= 0;
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+
+      match /participants/{participantId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn()
+          && participantId == request.auth.uid
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if signedIn() && participantId == request.auth.uid;
+      }
+
+      match /signals/{signalId} {
+        allow read: if signedIn() && resource.data.to == request.auth.uid;
+        allow create, update: if signedIn()
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.to != request.auth.uid;
+        allow delete: if signedIn() && resource.data.from == request.auth.uid;
+      }
+
+      match /candidates/{candidateId} {
+        allow read: if signedIn() && resource.data.to == request.auth.uid;
+        allow create: if signedIn()
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.to != request.auth.uid;
+        allow delete: if signedIn() && resource.data.from == request.auth.uid;
+      }
+    }
+  }
+}
