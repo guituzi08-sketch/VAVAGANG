@@ -16,7 +16,7 @@ const CallContext = createContext(null);
 const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 export function CallProvider({ children }) {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
   const [localStream, setLocalStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
   const [remoteStreams, setRemoteStreams] = useState({});
@@ -77,10 +77,10 @@ export function CallProvider({ children }) {
     const remoteScreenStream = new MediaStream();
     peer.media = { audioSender: audioTransceiver.sender, screenAudioSender: screenAudioTransceiver.sender, videoSender: videoTransceiver.sender, remoteAudioStream, remoteScreenStream };
     const localAudioTrack = localStreamRef.current?.getAudioTracks()[0];
-    if (localAudioTrack) audioTransceiver.sender.replaceTrack(localAudioTrack);
+    if (localAudioTrack) await audioTransceiver.sender.replaceTrack(localAudioTrack);
     if (screenStreamRef.current) {
-      videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null);
-      screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null);
+      await videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null);
+      await screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null);
     }
     peer.ontrack = (event) => {
       const isScreenTrack = event.transceiver === videoTransceiver || event.transceiver === screenAudioTransceiver;
@@ -215,7 +215,7 @@ export function CallProvider({ children }) {
       }
       localStreamRef.current = stream;
       setLocalStream(stream);
-      await joinRoom(roomId, firebaseUser);
+      await joinRoom(roomId, firebaseUser, profile);
       if (callToken !== callTokenRef.current) {
         await leaveRoom(roomId, firebaseUser.uid);
         stream.getTracks().forEach((track) => track.stop());

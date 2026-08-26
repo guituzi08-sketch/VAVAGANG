@@ -101,23 +101,27 @@ export async function sendRoomMessage(roomId, user, text) {
   });
 }
 
-export async function joinRoom(roomId, user) {
+export async function joinRoom(roomId, user, profile = {}) {
   await runTransaction(db, async (transaction) => {
     const participantRef = doc(db, "rooms", roomId, "participants", user.uid);
     const roomRef = doc(db, "rooms", roomId);
     const participantSnapshot = await transaction.get(participantRef);
     const roomSnapshot = await transaction.get(roomRef);
     if (!roomSnapshot.exists() || roomSnapshot.data().status === "closed") throw new Error("Esta sala foi encerrada.");
-    if (participantSnapshot.exists()) return;
-    transaction.set(participantRef, {
+    const participantData = {
       uid: user.uid,
-      displayName: user.displayName ?? user.email ?? "Jogador",
+      displayName: profile.nickname || profile.displayName || user.displayName || user.email || "Jogador",
       photoURL: user.photoURL ?? "",
       status: "online",
       muted: false,
       speaking: false,
       joinedAt: serverTimestamp(),
-    });
+    };
+    if (participantSnapshot.exists()) {
+      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online" });
+      return;
+    }
+    transaction.set(participantRef, participantData);
     transaction.update(roomRef, { participantCount: increment(1) });
   });
 }
