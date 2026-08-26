@@ -32,6 +32,7 @@ export function CallProvider({ children }) {
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const pendingCandidates = useRef(new Map());
+  const processedSignals = useRef(new Set());
   const callTokenRef = useRef(0);
 
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
@@ -130,12 +131,16 @@ export function CallProvider({ children }) {
     const unsubscribeSignals = onSnapshot(signalsQuery, async (snapshot) => {
       try {
         for (const change of snapshot.docChanges()) {
-          if (change.type !== "added" || cancelled) continue;
+          if (!['added', 'modified'].includes(change.type) || cancelled) continue;
           const signal = change.doc.data();
+          if (signal.from === firebaseUser.uid || !signal.sdp) continue;
+          const signalKey = `${signal.from}:${signal.type}:${signal.sdp}`;
+          if (processedSignals.current.has(signalKey)) continue;
           const peer = await createPeer(signal.from, false);
           if (signal.type === "offer") {
             if (peer.signalingState !== "stable") continue;
             await peer.setRemoteDescription({ type: "offer", sdp: signal.sdp });
+            processedSignals.current.add(signalKey);
             const queuedCandidates = pendingCandidates.current.get(signal.from) ?? [];
             await Promise.all(queuedCandidates.map((candidate) => peer.addIceCandidate(candidate)));
             pendingCandidates.current.delete(signal.from);
@@ -150,6 +155,7 @@ export function CallProvider({ children }) {
           } else if (signal.type === "answer" && !peer.currentRemoteDescription) {
             if (peer.signalingState !== "have-local-offer") continue;
             await peer.setRemoteDescription({ type: "answer", sdp: signal.sdp });
+            processedSignals.current.add(signalKey);
             const queuedCandidates = pendingCandidates.current.get(signal.from) ?? [];
             await Promise.all(queuedCandidates.map((candidate) => peer.addIceCandidate(candidate)));
             pendingCandidates.current.delete(signal.from);
@@ -255,6 +261,7 @@ export function CallProvider({ children }) {
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
       screenStreamRef.current?.getTracks().forEach((track) => track.stop());
       pendingCandidates.current.clear();
+      processedSignals.current.clear();
       setLocalStream(null);
       setScreenStream(null);
       setRemoteStreams({});
