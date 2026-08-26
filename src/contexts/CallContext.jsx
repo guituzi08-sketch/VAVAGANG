@@ -90,6 +90,7 @@ export function CallProvider({ children }) {
   async function createPeer(remoteUid, shouldOffer) {
     const existingPeer = peers.current.get(remoteUid);
     if (existingPeer) {
+      await existingPeer.readyPromise;
       if (shouldOffer && !existingPeer.localDescription && !existingPeer.offerPromise) {
         existingPeer.offerPromise = (async () => {
           const offer = await existingPeer.createOffer();
@@ -111,18 +112,23 @@ export function CallProvider({ children }) {
     const remoteAudioStream = new MediaStream();
     const remoteScreenStream = new MediaStream();
     const audioTrack = localStreamRef.current?.getAudioTracks()[0];
-    const audioSender = audioTrack && localStreamRef.current ? peer.addTrack(audioTrack, localStreamRef.current) : null;
+    const audioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
     const screenAudioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
     const videoTransceiver = peer.addTransceiver("video", { direction: "sendrecv" });
+    const audioSender = audioTransceiver.sender;
+    const readyPromise = audioSender.replaceTrack(audioTrack ?? null);
+    peer.readyPromise = readyPromise;
     peer.media = { audioSender, screenAudioSender: screenAudioTransceiver.sender, videoSender: videoTransceiver.sender, remoteAudioStream, remoteScreenStream };
     console.info("[VOICE DEBUG] local stream", Boolean(localStreamRef.current));
     console.info("[VOICE DEBUG] audio tracks", localStreamRef.current?.getAudioTracks().length ?? 0);
     console.info("[VOICE DEBUG] audio track", { enabled: audioTrack?.enabled ?? false, readyState: audioTrack?.readyState ?? "missing" });
     console.info("[VOICE DEBUG] audio sender exists", Boolean(audioSender));
-    if (!audioSender && audioTrack) throw new Error("Não foi possível adicionar o microfone à PeerConnection.");
     if (screenStreamRef.current) {
-      await videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null);
-      await screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null);
+      peer.readyPromise = Promise.all([
+        readyPromise,
+        videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null),
+        screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null),
+      ]);
     }
     peer.ontrack = (event) => {
       const isScreenTrack = event.track.kind === "video" || event.transceiver === screenAudioTransceiver;
@@ -157,6 +163,7 @@ export function CallProvider({ children }) {
 
     if (shouldOffer) {
       peer.offerPromise = (async () => {
+        await peer.readyPromise;
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
         console.info("[VOICE DEBUG] offer audio", peer.localDescription?.sdp?.includes("m=audio"));
