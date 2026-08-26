@@ -1,6 +1,7 @@
 import {
   addDoc,
   arrayUnion,
+  arrayRemove,
   collection,
   deleteDoc,
   doc,
@@ -49,6 +50,7 @@ export async function createGroup({ name, description, privacy }, uid) {
     privacy,
     ownerId: uid,
     memberIds: [uid],
+    roles: { [uid]: "OWNER" },
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -105,6 +107,15 @@ export async function deleteChannelMessage(groupId, channelId, messageId) {
 
 export async function addMemberToGroup(groupId, uid) {
   await updateDoc(doc(db, "groups", groupId), { memberIds: arrayUnion(uid) });
+}
+
+export async function removeMemberFromGroup(groupId, uid) {
+  await updateDoc(doc(db, "groups", groupId), { memberIds: arrayRemove(uid), [`roles.${uid}`]: null });
+}
+
+export async function changeMemberRole(groupId, uid, role) {
+  if (!["OWNER", "ADMIN", "MODERATOR", "MEMBER"].includes(role)) throw new Error("Cargo inválido.");
+  await updateDoc(doc(db, "groups", groupId), { [`roles.${uid}`]: role });
 }
 
 export function subscribeToGroupInvites(uid, onChange, onError) {

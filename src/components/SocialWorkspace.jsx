@@ -6,6 +6,7 @@ import { useSocial } from "../contexts/SocialContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
 import { createFriendRequest } from "../services/friendService";
 import { searchUsers } from "../services/userService";
+import { changeMemberRole, inviteToGroup, removeMemberFromGroup } from "../services/communityService";
 
 const tabs = ["Todos", "Online", "Solicitações", "Bloqueados"];
 
@@ -40,7 +41,7 @@ function NotificationsView() {
 
 function SearchView() {
   const [query, setQuery] = useState("");
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
