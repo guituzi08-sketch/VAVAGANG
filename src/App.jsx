@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { CallProvider } from "./contexts/CallContext";
+import { DirectMessageProvider } from "./contexts/DirectMessageContext";
 import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -18,7 +19,7 @@ function ProtectedLayout() {
   const { firebaseUser, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
-  return <Outlet />;
+  return <DirectMessageProvider><CallProvider><Outlet /></CallProvider></DirectMessageProvider>;
 }
 
 export default function App() {
@@ -40,8 +41,8 @@ export default function App() {
           <Route path="/channels/:channelId" element={<WorkspacePage section="channels" />} />
           <Route path="/voice/:voiceId" element={<WorkspacePage section="voice" />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/room/:roomId" element={<RoomPage />} />
         </Route>
-        <Route path="/room/:roomId" element={<CallProvider><RoomPage /></CallProvider>} />
       </Route>
       <Route path="*" element={<Navigate to={firebaseUser ? "/" : "/login"} replace />} />
     </Routes>

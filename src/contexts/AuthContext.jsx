@@ -1,7 +1,7 @@
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { createContext, useContext, useEffect, useState } from "react";
 import { auth, googleProvider } from "../firebase";
-import { syncUserProfile, updateUserProfile } from "../services/userService";
+import { setUserPresence, syncUserProfile, updateUserProfile } from "../services/userService";
 
 const AuthContext = createContext(null);
 
@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
 
         try {
           setProfile(await syncUserProfile(user));
+          await setUserPresence(user.uid, "online");
         } catch (profileError) {
           setError(profileError.message);
         } finally {
@@ -58,6 +59,7 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    if (firebaseUser) await setUserPresence(firebaseUser.uid, "offline");
     await signOut(auth);
   }
 

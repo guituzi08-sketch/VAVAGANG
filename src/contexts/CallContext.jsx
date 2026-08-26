@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { joinRoom, leaveRoom, subscribeToParticipants } from "../services/roomService";
+import { joinRoom, leaveRoom, subscribeToParticipants, subscribeToRoom, updateParticipantState } from "../services/roomService";
 import { useAuth } from "./AuthContext";
 
 const CallContext = createContext(null);
@@ -22,6 +22,10 @@ export function CallProvider({ children }) {
   const [remoteStreams, setRemoteStreams] = useState({});
   const [participants, setParticipants] = useState([]);
   const [mediaError, setMediaError] = useState("");
+  const [roomClosed, setRoomClosed] = useState(false);
+  const [roomClosedMessage, setRoomClosedMessage] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [activeRoomId, setActiveRoomId] = useState(null);
   const peers = useRef(new Map());
   const roomIdRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -142,12 +146,29 @@ export function CallProvider({ children }) {
     return subscribeToParticipants(roomIdRef.current, setParticipants, setMediaError);
   }, [firebaseUser, localStream]);
 
+  useEffect(() => {
+    if (!firebaseUser || !activeRoomId) return undefined;
+    return subscribeToRoom(activeRoomId, (room) => {
+      if (!room || room.status === "closed") {
+        setRoomClosed(true);
+        setRoomClosedMessage(room ? "Esta sala foi encerrada pelo proprietário." : "Esta sala não existe mais.");
+        exitCall();
+      }
+    }, (error) => setMediaError(error.message));
+  }, [activeRoomId, firebaseUser]);
+
   async function enterCall(roomId) {
+    if (!roomId || (roomIdRef.current === roomId && localStreamRef.current)) return;
+    if (roomIdRef.current && roomIdRef.current !== roomId) await exitCall();
     const callToken = ++callTokenRef.current;
     roomIdRef.current = roomId;
+    setActiveRoomId(roomId);
+    setRoomClosed(false);
+    setRoomClosedMessage("");
     setMediaError("");
+    setIsConnecting(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (callToken !== callTokenRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -160,12 +181,16 @@ export function CallProvider({ children }) {
         stream.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
         setLocalStream(null);
+        setIsConnecting(false);
       }
+      setIsConnecting(false);
     } catch (error) {
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
       setLocalStream(null);
       localStreamRef.current = null;
       roomIdRef.current = null;
+      setActiveRoomId(null);
+      setIsConnecting(false);
       setMediaError(
         error.name === "NotAllowedError"
           ? "Permita microfone e câmera para entrar na sala."
@@ -193,6 +218,8 @@ export function CallProvider({ children }) {
       localStreamRef.current = null;
       screenStreamRef.current = null;
       roomIdRef.current = null;
+      setActiveRoomId(null);
+      setIsConnecting(false);
     }
   }
 
@@ -213,6 +240,7 @@ export function CallProvider({ children }) {
   function toggleAudio() {
     const track = localStream?.getAudioTracks()[0];
     if (track) track.enabled = !track.enabled;
+    if (roomIdRef.current && firebaseUser) updateParticipantState(roomIdRef.current, firebaseUser.uid, { muted: !track?.enabled }).catch((error) => setMediaError(error.message));
     return track?.enabled ?? false;
   }
 
@@ -252,7 +280,7 @@ export function CallProvider({ children }) {
   }
 
   return (
-    <CallContext.Provider value={{ localStream, screenStream, remoteStreams, participants, mediaError, enterCall, exitCall, toggleAudio, toggleVideo, shareScreen }}>
+    <CallContext.Provider value={{ localStream, screenStream, remoteStreams, participants, mediaError, roomClosed, roomClosedMessage, activeRoomId, isConnecting, enterCall, exitCall, toggleAudio, toggleVideo, shareScreen }}>
       {children}
     </CallContext.Provider>
   );

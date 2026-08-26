@@ -1,6 +1,5 @@
 import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { db, storage } from "../firebase";
+import { db } from "../firebase";
 
 export function subscribeToVavagramPosts(onChange, onError) {
   return onSnapshot(
@@ -30,14 +29,8 @@ export function validateVavagramFile(file, kind) {
 }
 
 export function uploadVavagramFile(file, path, onProgress, signal) {
-  let uploadTask;
-  const uploadPromise = new Promise((resolve, reject) => {
-    uploadTask = uploadBytesResumable(ref(storage, path), file, { contentType: file.type });
-    uploadTask.on("state_changed", (snapshot) => onProgress?.(snapshot.bytesTransferred / snapshot.totalBytes * 100), reject, () => getDownloadURL(uploadTask.snapshot.ref).then(resolve).catch(reject));
-  });
-  signal?.addEventListener("abort", () => uploadTask.cancel(), { once: true });
-  uploadPromise.cancel = () => uploadTask.cancel();
-  return uploadPromise;
+  void file; void path; void onProgress; void signal;
+  return Promise.reject(new Error("Upload de mídia não está disponível. Use uma URL externa."));
 }
 
 export async function createVavagramPost({ files, caption, visibility, author, signal, onProgress }) {

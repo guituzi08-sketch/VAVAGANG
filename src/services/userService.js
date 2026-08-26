@@ -28,3 +28,7 @@ export async function updateUserProfile(uid, profileChanges) {
   const snapshot = await getDoc(userRef);
   return snapshot.data();
 }
+
+export async function setUserPresence(uid, presenceStatus) {
+  await setDoc(doc(db, "users", uid), { presenceStatus, lastSeenAt: serverTimestamp() }, { merge: true });
+}
