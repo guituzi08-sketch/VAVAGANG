@@ -96,12 +96,15 @@ export function CallProvider({ children }) {
       };
     };
     peer.onicecandidate = async (event) => {
-      if (event.candidate) {
+      if (!event.candidate) return;
+      try {
         await addDoc(collection(db, "rooms", roomId, "candidates"), {
           from: firebaseUser.uid,
           to: remoteUid,
           candidate: event.candidate.toJSON(),
         });
+      } catch (error) {
+        setMediaError(`Falha ao enviar ICE candidate: ${error.message}`);
       }
     };
 
@@ -270,7 +273,7 @@ export function CallProvider({ children }) {
     if (!localStream || !firebaseUser) return undefined;
     const remotes = participants.filter((participant) => participant.uid !== firebaseUser.uid);
     remotes.forEach((participant) => {
-      if (firebaseUser.uid < participant.uid) createPeer(participant.uid, true);
+      if (firebaseUser.uid < participant.uid) createPeer(participant.uid, true).catch((error) => setMediaError(`Falha ao conectar participante: ${error.message}`));
     });
     peers.current.forEach((_, uid) => {
       if (!remotes.some((participant) => participant.uid === uid)) removePeer(uid);

@@ -1,5 +1,5 @@
 import { Headphones, MessageCircle, Mic, MicOff, MonitorUp, Send, Users, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
@@ -8,6 +8,20 @@ import { sendRoomMessage, subscribeToRoomMessages } from "../services/roomServic
 import ScreenShareViewer from "./ScreenShareViewer";
 
 export default function VoiceChannelPage({ roomId }) {
+  return <VoiceErrorBoundary roomId={roomId}><VoiceChannelContent roomId={roomId} /></VoiceErrorBoundary>;
+}
+
+class VoiceErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error) { console.error("[VoiceChannel] render error", error); }
+  render() {
+    if (this.state.hasError) return <main className="voice-channel-page"><section className="workspace-empty"><h2>Não foi possível conectar à sala de voz.</h2><button className="secondary-button" onClick={() => this.setState({ hasError: false })}>Tentar novamente</button></section></main>;
+    return this.props.children;
+  }
+}
+
+function VoiceChannelContent({ roomId }) {
   const { firebaseUser } = useAuth();
   const navigate = useNavigate();
   const { openPrivateChat } = useDirectMessages();
@@ -49,7 +63,7 @@ export default function VoiceChannelPage({ roomId }) {
           return <div className="voice-participant" key={participant.uid}><span className="presence-dot" /><div><strong>{participant.displayName}</strong><small>{participant.uid === firebaseUser?.uid ? "Você" : "na sala"}</small></div><span className="participant-audio">{participant.muted ? <MicOff size={15} /> : <Mic size={15} />}</span>{isSharing && <span className="screen-share-label">📺 {participant.screenAudio ? "🔊" : ""}</span>}{participant.uid !== firebaseUser?.uid && <button className="icon-button participant-message" onClick={() => openPrivateChat({ uid: participant.uid, displayName: participant.displayName })} title="Mensagem privada"><MessageCircle size={15} /></button>}{hasRemoteAudio && <div className="participant-volume"><button className="icon-button" onClick={() => setVolumeTarget(volumeTarget === participant.uid ? null : participant.uid)} title="Volume individual">{participantVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>{volumeTarget === participant.uid && <input type="range" min="0" max="1" step="0.05" value={participantVolume} onChange={(event) => setVolumes((current) => ({ ...current, [participant.uid]: Number(event.target.value) }))} aria-label={`Volume de ${participant.displayName}`} />}</div>}</div>;
         })}</div>
         {Object.entries(remoteStreams).map(([uid, stream]) => <RemoteAudio key={uid} stream={stream} volume={volumes[uid] ?? 1} onBlocked={() => setAudioBlocked(true)} />)}
-        {audioBlocked && <button className="secondary-button" onClick={() => setAudioBlocked(false)}>Ativar áudio</button>}
+        {audioBlocked && <button className="secondary-button" onClick={() => { document.querySelectorAll("audio").forEach((audio) => audio.play().catch(() => {})); setAudioBlocked(false); }}>Ativar áudio</button>}
         <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={() => setAudioEnabled(toggleAudio())} title={audioEnabled ? "Silenciar" : "Ativar microfone"}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={screenStream ? stopScreenShare : shareScreen} title={screenStream ? "Parar compartilhamento" : "Compartilhar tela"}><MonitorUp /><span>{screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
       </section>
       <section className="room-chat"><div className="voice-section-title"><span><Headphones size={16} /> Chat da sala</span><span className="chat-live">tempo real</span></div><div className="room-message-list">{messages.length === 0 && <p className="voice-empty">As mensagens desta sala aparecerão aqui.</p>}{messages.map((message) => <article className="room-message" key={message.id}><strong>{message.authorName}</strong><p>{message.text}</p></article>)}</div>{messageError && <p className="error-message">{messageError}</p>}<form className="room-message-form" onSubmit={submitMessage}><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Conversar em voz..." maxLength={500} /><button className="icon-button" disabled={!messageText.trim()} title="Enviar mensagem"><Send size={16} /></button></form></section>
@@ -67,6 +81,6 @@ function RemoteAudio({ stream, volume, onBlocked }) {
     audio.volume = volume;
     audio.play().catch((error) => { if (error.name !== "AbortError") onBlocked(); });
     return () => { audio.srcObject = null; };
-  }, [stream, volume, onBlocked]);
+  }, [stream, volume]);
   return <audio ref={audioRef} autoPlay playsInline />;
 }
