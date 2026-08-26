@@ -92,12 +92,12 @@ export function CallProvider({ children }) {
     const roomId = roomIdRef.current;
     const peer = new RTCPeerConnection(rtcConfig);
     peers.current.set(remoteUid, peer);
-    const screenAudioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
-    const videoTransceiver = peer.addTransceiver("video", { direction: "sendrecv" });
     const remoteAudioStream = new MediaStream();
     const remoteScreenStream = new MediaStream();
     const audioTrack = localStreamRef.current?.getAudioTracks()[0];
     const audioSender = audioTrack && localStreamRef.current ? peer.addTrack(audioTrack, localStreamRef.current) : null;
+    const screenAudioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
+    const videoTransceiver = peer.addTransceiver("video", { direction: "sendrecv" });
     peer.media = { audioSender, screenAudioSender: screenAudioTransceiver.sender, videoSender: videoTransceiver.sender, remoteAudioStream, remoteScreenStream };
     console.info("[VOICE DEBUG] local stream", Boolean(localStreamRef.current));
     console.info("[VOICE DEBUG] audio tracks", localStreamRef.current?.getAudioTracks().length ?? 0);
