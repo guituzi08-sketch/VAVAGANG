@@ -1,16 +1,19 @@
-import { Bell, Camera, Compass, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Settings, UsersRound } from "lucide-react";
+import { Bell, Camera, Compass, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Settings, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
+import { useSocial } from "../contexts/SocialContext";
 import { subscribeToRooms } from "../services/roomService";
+import ScreenShareViewer from "./ScreenShareViewer";
 
 const primaryNavigation = [
   { to: "/", label: "Início", icon: Home, end: true },
   { to: "/messages", label: "Mensagens", icon: MessageSquare },
   { to: "/friends", label: "Amigos", icon: UsersRound },
   { to: "/requests", label: "Notificações", icon: Bell },
+  { to: "/moments", label: "Moments", icon: Flame },
   { to: "/settings", label: "Configurações", icon: Settings },
 ];
 
@@ -28,9 +31,20 @@ export default function AppShell() {
   const [rooms, setRooms] = useState([]);
   const navigate = useNavigate();
   const { activeRoomId } = useCall();
+  const { groups } = useSocial();
   const { unreadCount, contact, messages, closePrivateChat, sendMessage, error: directMessageError } = useDirectMessages();
   const [directText, setDirectText] = useState("");
   useEffect(() => subscribeToRooms(setRooms, () => {}), []);
+  useEffect(() => {
+    function handleShortcut(event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        navigate("/search");
+      }
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [navigate]);
 
   return <div className="workspace-shell">
     <aside className="community-rail" aria-label="Navegação principal">
@@ -45,7 +59,7 @@ export default function AppShell() {
     </aside>
     <aside className="navigation-panel" aria-label="Navegação da seção">
       <div className="navigation-header"><strong>VAVAGANG</strong><button className="icon-button" title="Pesquisar"><Search size={16} /></button></div>
-      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<div className="nav-divider" /><div className="channel-heading"><span>Meu espaço</span><button className="nav-add" onClick={() => navigate("/")} title="Criar sala"><Plus size={15} /></button></div><NavLink className="nav-item" to="/channels/general"><MessageSquare size={17} /><span>geral</span></NavLink><span className="nav-caption">Voz</span>{rooms.map((room) => <NavLink className="nav-item voice-nav-item" to={`/voice/${room.id}`} key={room.id}><span className="voice-glyph">🔊</span><span>{room.name}</span><small>{room.participantCount ?? 0}</small></NavLink>)}{rooms.length === 0 && <p className="navigation-empty">Suas salas de voz aparecerão aqui.</p>}</nav>
+      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink><div className="nav-divider" /><div className="channel-heading"><span>Grupos</span><button className="nav-add" onClick={() => navigate("/groups")} title="Criar grupo"><Plus size={15} /></button></div>{groups.map((group) => <NavLink className="nav-item" to={`/groups/${group.id}`} key={group.id}><span>🔥</span><span>{group.name}</span></NavLink>)}{groups.length === 0 && <p className="navigation-empty">Crie um grupo para organizar canais.</p>}<div className="channel-heading"><span>Meu espaço</span><button className="nav-add" onClick={() => navigate("/")} title="Criar sala"><Plus size={15} /></button></div><NavLink className="nav-item" to="/channels/general"><MessageSquare size={17} /><span>geral</span></NavLink><span className="nav-caption">Voz</span>{rooms.map((room) => <NavLink className="nav-item voice-nav-item" to={`/voice/${room.id}`} key={room.id}><span className="voice-glyph">🔊</span><span>{room.name}</span><small>{room.participantCount ?? 0}</small></NavLink>)}{rooms.length === 0 && <p className="navigation-empty">Suas salas de voz aparecerão aqui.</p>}</nav>
       <div className="navigation-footer"><div className="footer-user"><div className="avatar avatar-fallback">{profile?.displayName?.[0] ?? "V"}</div><div><strong>{profile?.displayName ?? "Usuário"}</strong><span>online no app</span></div></div><div className="footer-actions"><NavLink className="icon-button" to="/settings" title="Configurações"><Settings size={16} /></NavLink><button className="icon-button" onClick={logout} title="Sair"><LogOut size={16} /></button></div></div>
     </aside>
       <section className="workspace-main"><Outlet /></section>
@@ -62,11 +76,12 @@ export default function AppShell() {
   }
 
 function VoiceMiniPlayer({ onOpen }) {
-  const { activeRoomId, participants, localStream, isConnecting, toggleAudio, exitCall } = useCall();
+  const { activeRoomId, participants, remoteScreenStreams, localStream, isConnecting, toggleAudio, exitCall } = useCall();
   const [audioEnabled, setAudioEnabled] = useState(true);
   const participantNames = participants.slice(0, 3).map((participant) => participant.displayName).join(" · ");
   useEffect(() => { setAudioEnabled(localStream?.getAudioTracks()[0]?.enabled ?? true); }, [localStream]);
-  return <aside className="voice-mini-player" aria-label="Chamada de voz ativa"><div className="voice-mini-status"><span className="live-dot" /><div><strong>🔊 Sala ativa</strong><small>{isConnecting ? "Conectando..." : participantNames || activeRoomId}</small></div></div><div className="voice-mini-actions"><button className={`icon-button ${audioEnabled ? "" : "is-muted"}`} onClick={() => setAudioEnabled(toggleAudio())} title={audioEnabled ? "Silenciar microfone" : "Ativar microfone"}>{audioEnabled ? <Mic size={16} /> : <MicOff size={16} />}</button><button className="icon-button" onClick={onOpen} title="Voltar para o canal"><MoreHorizontal size={16} /></button><button className="icon-button voice-leave" onClick={exitCall} title="Sair da voz">×</button></div></aside>;
+  const sharedScreen = Object.entries(remoteScreenStreams ?? {}).find(([, stream]) => stream.getVideoTracks().length > 0);
+  return <aside className={`voice-mini-player ${sharedScreen ? "has-screen-share" : ""}`} aria-label="Chamada de voz ativa">{sharedScreen && <ScreenShareViewer stream={sharedScreen[1]} label="Tela compartilhada" compact />}{!sharedScreen && <div className="voice-mini-status"><span className="live-dot" /><div><strong>🔊 Sala ativa</strong><small>{isConnecting ? "Conectando..." : participantNames || activeRoomId}</small></div></div>}<div className="voice-mini-actions"><button className={`icon-button ${audioEnabled ? "" : "is-muted"}`} onClick={() => setAudioEnabled(toggleAudio())} title={audioEnabled ? "Silenciar microfone" : "Ativar microfone"}>{audioEnabled ? <Mic size={16} /> : <MicOff size={16} />}</button><button className="icon-button" onClick={onOpen} title="Voltar para o canal"><MoreHorizontal size={16} /></button><button className="icon-button voice-leave" onClick={exitCall} title="Sair da voz">×</button></div></aside>;
 }
 
 function PrivateChatOverlay({ contact, messages, error, text, setText, onClose, onSend }) {

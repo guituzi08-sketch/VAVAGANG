@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { db } from "../firebase";
 
 export async function syncUserProfile(firebaseUser) {
@@ -8,7 +8,10 @@ export async function syncUserProfile(firebaseUser) {
     uid: firebaseUser.uid,
     email: firebaseUser.email ?? "",
     displayName: firebaseUser.displayName ?? "Jogador",
+    displayNameNormalized: (firebaseUser.displayName ?? "Jogador").trim().toLowerCase(),
     photoURL: firebaseUser.photoURL ?? "",
+    username: snapshot.exists() ? snapshot.data().username ?? "" : "",
+    usernameNormalized: snapshot.exists() ? snapshot.data().usernameNormalized ?? normalizeUserSearch(snapshot.data().username ?? "") : "",
     updatedAt: serverTimestamp(),
   };
 
@@ -24,9 +27,38 @@ export async function syncUserProfile(firebaseUser) {
 
 export async function updateUserProfile(uid, profileChanges) {
   const userRef = doc(db, "users", uid);
-  await setDoc(userRef, { ...profileChanges, updatedAt: serverTimestamp() }, { merge: true });
+  const changes = { ...profileChanges, updatedAt: serverTimestamp() };
+  if (typeof changes.username === "string") {
+    const username = changes.username.trim().replace(/^@/, "").toLowerCase();
+    if (username && !/^[a-z0-9_\.]{3,24}$/.test(username)) throw new Error("Use um username com 3 a 24 caracteres: letras, números, ponto ou _. ");
+    changes.username = username;
+    changes.usernameNormalized = username;
+    if (username) {
+      const existing = await getDocs(query(collection(db, "users"), where("usernameNormalized", "==", username), limit(2)));
+      if (existing.docs.some((snapshot) => snapshot.id !== uid)) throw new Error("Este username já está em uso.");
+    }
+  }
+  await setDoc(userRef, changes, { merge: true });
   const snapshot = await getDoc(userRef);
   return snapshot.data();
+}
+
+export function normalizeUserSearch(value) {
+  return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+export async function searchUsers(searchValue) {
+  const normalized = normalizeUserSearch(searchValue);
+  if (!normalized) return [];
+  const usersRef = collection(db, "users");
+  const prefixEnd = `${normalized}\uf8ff`;
+  const [usernameSnapshot, displayNameSnapshot] = await Promise.all([
+    getDocs(query(usersRef, where("usernameNormalized", ">=", normalized), where("usernameNormalized", "<=", prefixEnd), limit(20))),
+    getDocs(query(usersRef, where("displayNameNormalized", ">=", normalized), where("displayNameNormalized", "<=", prefixEnd), limit(20))),
+  ]);
+  const users = new Map();
+  [...usernameSnapshot.docs, ...displayNameSnapshot.docs].forEach((snapshot) => users.set(snapshot.id, { uid: snapshot.id, ...snapshot.data() }));
+  return [...users.values()].filter((user) => user.uid).slice(0, 20);
 }
 
 export async function setUserPresence(uid, presenceStatus) {

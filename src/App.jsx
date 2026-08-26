@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { CallProvider } from "./contexts/CallContext";
 import { DirectMessageProvider } from "./contexts/DirectMessageContext";
+import { SocialProvider } from "./contexts/SocialContext";
 import AppShell from "./components/AppShell";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -19,7 +20,7 @@ function ProtectedLayout() {
   const { firebaseUser, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
-  return <DirectMessageProvider><CallProvider><Outlet /></CallProvider></DirectMessageProvider>;
+  return <SocialProvider><DirectMessageProvider><CallProvider><Outlet /></CallProvider></DirectMessageProvider></SocialProvider>;
 }
 
 export default function App() {
@@ -35,9 +36,11 @@ export default function App() {
           <Route path="/friends" element={<WorkspacePage section="friends" />} />
           <Route path="/requests" element={<WorkspacePage section="requests" />} />
           <Route path="/messages" element={<WorkspacePage section="messages" />} />
+          <Route path="/search" element={<WorkspacePage section="search" />} />
           <Route path="/moments" element={<MomentsPage />} />
           <Route path="/vavagram" element={<VavagramPage />} />
           <Route path="/groups/:groupId" element={<WorkspacePage section="groups" />} />
+          <Route path="/groups" element={<WorkspacePage section="groups" />} />
           <Route path="/channels/:channelId" element={<WorkspacePage section="channels" />} />
           <Route path="/voice/:voiceId" element={<WorkspacePage section="voice" />} />
           <Route path="/settings" element={<SettingsPage />} />
