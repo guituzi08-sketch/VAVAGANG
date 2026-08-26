@@ -179,6 +179,20 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
     }
 
+    match /soundEffects/{effectId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasAll(['name', 'storagePath', 'publicUrl', 'mimeType', 'size', 'createdBy', 'createdAt'])
+        && request.resource.data.size <= 10485760;
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /{path=**}/soundEffects/{effectId} {
+      allow read: if signedIn();
+    }
+
     match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
