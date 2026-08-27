@@ -42,7 +42,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), localSessionId: createSessionId(), remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const audio = pc.addTransceiver("audio", { direction: "sendrecv" });
     const camera = pc.addTransceiver("video", { direction: "sendrecv" });
@@ -88,8 +88,11 @@ export class PeerConnectionManager {
     }
     if (this.participantSessions.get(signal.from) !== signal.callSessionId) return;
     const state = await this.ensurePeer(signal.from);
-    if (signal.type === "offer") await this.handleOffer(state, signal);
-    if (signal.type === "answer") await this.handleAnswer(state, signal);
+    state.signaling = state.signaling.then(async () => {
+      if (signal.type === "offer") await this.handleOffer(state, signal);
+      if (signal.type === "answer") await this.handleAnswer(state, signal);
+    }).catch((error) => this.reportPeerError(error, state.remoteUid));
+    return state.signaling;
   }
 
   async handleOffer(state, signal) {
@@ -123,10 +126,13 @@ export class PeerConnectionManager {
     }
     if (this.participantSessions.get(candidate.from) !== candidate.callSessionId) return;
     const state = await this.ensurePeer(candidate.from);
-    if (state.processedCandidates.has(candidate.id)) return;
-    state.processedCandidates.add(candidate.id);
-    if (!state.remoteDescriptionSet) state.pendingCandidates.push(candidate);
-    else await state.pc.addIceCandidate(candidate.candidate).catch((error) => this.reportPeerError(error, state.remoteUid));
+    state.signaling = state.signaling.then(async () => {
+      if (state.processedCandidates.has(candidate.id)) return;
+      state.processedCandidates.add(candidate.id);
+      if (!state.remoteDescriptionSet) state.pendingCandidates.push(candidate);
+      else await state.pc.addIceCandidate(candidate.candidate).catch((error) => this.reportPeerError(error, state.remoteUid));
+    }).catch((error) => this.reportPeerError(error, state.remoteUid));
+    return state.signaling;
   }
 
   async flushCandidates(state) {
