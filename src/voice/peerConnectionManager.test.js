@@ -16,6 +16,7 @@ class FakePeerConnection {
   addTransceiver() { const sender = { replaceTrack: async (track) => { sender.track = track; } }; this.senders.push(sender); return { sender, receiver: { track: null } }; }
   getTransceivers() { return this.senders.map((sender) => ({ sender, receiver: { track: null } })); }
   getSenders() { return this.senders; }
+  async getStats() { return new Map(); }
   close() { this.connectionState = "closed"; }
 }
 

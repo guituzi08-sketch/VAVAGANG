@@ -147,7 +147,20 @@ export class PeerConnectionManager {
   handleConnectionState(state) {
     const stateName = state.pc.connectionState;
     this.onPeerState(state.remoteUid, stateName);
+    if (stateName === PEER_STATES.CONNECTED) this.logAudioStats(state).catch((error) => this.reportPeerError(error, state.remoteUid));
     if (["failed", "disconnected"].includes(stateName)) this.recover(state);
+  }
+
+  async logAudioStats(state) {
+    if (typeof state.pc.getStats !== "function") return;
+    const stats = await state.pc.getStats();
+    const inboundAudio = [];
+    const outboundAudio = [];
+    stats.forEach((report) => {
+      if (report.type === "inbound-rtp" && (report.kind === "audio" || report.mediaType === "audio")) inboundAudio.push({ bytes: report.bytesReceived ?? 0, packets: report.packetsReceived ?? 0 });
+      if (report.type === "outbound-rtp" && (report.kind === "audio" || report.mediaType === "audio")) outboundAudio.push({ bytes: report.bytesSent ?? 0, packets: report.packetsSent ?? 0 });
+    });
+    console.info("[VOICE DEBUG] AUDIO PEER STATS", { remoteUid: state.remoteUid, inboundAudio, outboundAudio, connectionState: state.pc.connectionState, iceConnectionState: state.pc.iceConnectionState });
   }
 
   recover(state) {
