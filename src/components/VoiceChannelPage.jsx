@@ -127,6 +127,9 @@ function RemoteAudio({ userId, stream, volume, onBlocked }) {
     const audio = audioRef.current;
     if (!audio) return undefined;
     audio.srcObject = stream;
+    audio.autoplay = true;
+    audio.muted = false;
+    audio.volume = volume;
     console.info("[VOICE DEBUG] REMOTE STREAM ATTACHED", { userId, streamId: stream.id, tracks: stream.getTracks().length, audioTracks: stream.getAudioTracks().length });
     console.info("[VOICE DEBUG] REMOTE AUDIO ELEMENT", { userId, exists: Boolean(audio), srcObject: audio.srcObject !== null, paused: audio.paused, muted: audio.muted, volume: audio.volume, readyState: audio.readyState, autoplay: audio.autoplay });
     console.info("[VOICE DEBUG] REMOTE AUDIO STATE", { userId, muted: audio.muted, volume: audio.volume, paused: audio.paused, readyState: audio.readyState });

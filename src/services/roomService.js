@@ -108,7 +108,7 @@ export async function sendRoomMessage(roomId, user, text) {
   });
 }
 
-export async function joinRoom(roomId, user, profile = {}) {
+export async function joinRoom(roomId, user, profile = {}, callSessionId = null) {
   await runTransaction(db, async (transaction) => {
     const participantRef = doc(db, "rooms", roomId, "participants", user.uid);
     const roomRef = doc(db, "rooms", roomId);
@@ -125,10 +125,11 @@ export async function joinRoom(roomId, user, profile = {}) {
       cameraEnabled: false,
       screenSharing: false,
       screenAudio: false,
+      callSessionId,
       joinedAt: serverTimestamp(),
     };
     if (participantSnapshot.exists()) {
-      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online", cameraEnabled: false, screenSharing: false, screenAudio: false });
+      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online", cameraEnabled: false, screenSharing: false, screenAudio: false, callSessionId });
       return;
     }
     transaction.set(participantRef, participantData);
