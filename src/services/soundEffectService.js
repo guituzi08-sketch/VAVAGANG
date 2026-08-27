@@ -12,7 +12,15 @@ function getSafeFileName(fileName) {
 export function subscribeToSoundEffects(roomId, onChange, onError) {
   const globalEffects = new Map();
   const legacyEffects = new Map();
-  const publish = () => onChange([...globalEffects.values(), ...legacyEffects.values()].sort((first, second) => (second.createdAt?.seconds ?? 0) - (first.createdAt?.seconds ?? 0)));
+  const publish = () => {
+    const uniqueEffects = new Map();
+    [...globalEffects.values(), ...legacyEffects.values()].forEach((effect) => {
+      const effectKey = effect.storagePath || effect.publicUrl || `${effect.sourceCollection}/${effect.id}`;
+      const current = uniqueEffects.get(effectKey);
+      if (!current || effect.sourceCollection === "soundEffects") uniqueEffects.set(effectKey, effect);
+    });
+    onChange([...uniqueEffects.values()].sort((first, second) => (second.createdAt?.seconds ?? 0) - (first.createdAt?.seconds ?? 0)));
+  };
   const unsubscribeGlobal = onSnapshot(query(collection(db, "soundEffects"), orderBy("createdAt", "desc")), (snapshot) => {
     globalEffects.clear();
     snapshot.docs.forEach((item) => globalEffects.set(item.id, { id: item.id, sourceCollection: "soundEffects", ...item.data() }));

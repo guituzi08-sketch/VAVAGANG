@@ -11,19 +11,37 @@ export function SoundEffectsProvider({ children }) {
   const [audioBlocked, setAudioBlocked] = useState(false);
   const audioCache = useRef(new Map());
   const effectsRef = useRef([]);
+  const pendingEventsRef = useRef([]);
 
-  useEffect(() => { effectsRef.current = effects; }, [effects]);
+  useEffect(() => {
+    effectsRef.current = effects;
+    const pendingEvents = pendingEventsRef.current;
+    pendingEventsRef.current = [];
+    pendingEvents.forEach((event) => {
+      const effect = effects.find((item) => item.id === event.effectId);
+      if (effect) play(effect);
+    });
+  }, [effects]);
 
   function play(effect) {
+    if (!effect?.publicUrl) {
+      setError("Este efeito não possui uma URL de áudio válida.");
+      return;
+    }
     let audio = audioCache.current.get(effect.id);
     if (!audio) {
       audio = new Audio(effect.publicUrl);
       audio.preload = "auto";
+      audio.addEventListener("error", () => setError(`Não foi possível carregar o áudio \"${effect.name}\".`));
       audioCache.current.set(effect.id, audio);
     }
     audio.currentTime = 0;
+    audio.load();
     audio.play().catch((playError) => {
-      if (playError.name !== "AbortError") setAudioBlocked(true);
+      if (playError.name !== "AbortError") {
+        setAudioBlocked(true);
+        setError("O navegador bloqueou a reprodução. Clique novamente no pad para ativar o áudio.");
+      }
     });
   }
 
@@ -31,6 +49,7 @@ export function SoundEffectsProvider({ children }) {
     const [roomError, setRoomError] = useState("");
     useEffect(() => {
       if (!firebaseUser || !roomId) return undefined;
+      pendingEventsRef.current = [];
       const onError = (listenerError) => { setRoomError(listenerError.message); setError(listenerError.message); };
       const unsubscribeEffects = subscribeToSoundEffects(roomId, setEffects, onError);
       const unsubscribeEvents = subscribeToSoundEffectEvents(roomId, (events) => {
@@ -38,9 +57,10 @@ export function SoundEffectsProvider({ children }) {
           if (event.triggeredBy === firebaseUser.uid) return;
           const effect = effectsRef.current.find((item) => item.id === event.effectId);
           if (effect) play(effect);
+          else pendingEventsRef.current.push(event);
         });
       }, onError);
-      return () => { unsubscribeEffects(); unsubscribeEvents(); };
+      return () => { pendingEventsRef.current = []; unsubscribeEffects(); unsubscribeEvents(); };
     }, [firebaseUser, roomId]);
 
     async function trigger(roomEffect) {
