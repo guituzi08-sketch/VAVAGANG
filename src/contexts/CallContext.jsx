@@ -33,7 +33,12 @@ export function CallProvider({ children }) {
   const operationRef = useRef(Promise.resolve());
 
   function reportError(error, remoteUid) {
-    setMediaError(error?.message || "Não foi possível conectar à sala de voz.");
+    const message = error?.name === "NotAllowedError"
+      ? "Permita o uso do microfone e da câmera nas permissões do navegador."
+      : error?.name === "NotFoundError"
+        ? "Nenhum microfone ou câmera disponível foi encontrado."
+        : error?.message || "Não foi possível conectar à sala de voz.";
+    setMediaError(message);
     if (!remoteUid) setCallState(CALL_STATES.FAILED);
   }
   function setRemoteStream(uid, streams) {

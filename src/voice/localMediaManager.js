@@ -1,6 +1,13 @@
 export async function requestMicrophone() {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error("Seu navegador não oferece acesso ao microfone.");
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      autoGainControl: true,
+      echoCancellation: true,
+      noiseSuppression: true,
+    },
+    video: false,
+  });
   if (!stream.getAudioTracks().length) {
     stream.getTracks().forEach((track) => track.stop());
     throw new Error("O microfone não forneceu uma faixa de áudio.");
