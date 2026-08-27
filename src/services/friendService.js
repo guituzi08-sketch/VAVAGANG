@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { createNotification } from "./notificationService";
 
@@ -70,8 +70,8 @@ export async function unblockUser(blockId) {
 
 export async function isBlocked(uid, otherUid) {
   const [first, second] = await Promise.all([
-    getDocs(query(collection(db, "blocks"), where("ownerId", "==", uid), where("blockedUid", "==", otherUid))),
-    getDocs(query(collection(db, "blocks"), where("ownerId", "==", otherUid), where("blockedUid", "==", uid))),
+    getDoc(doc(db, "blocks", `${uid}_${otherUid}`)),
+    getDoc(doc(db, "blocks", `${otherUid}_${uid}`)),
   ]);
-  return !first.empty || !second.empty;
+  return first.exists() || second.exists();
 }
