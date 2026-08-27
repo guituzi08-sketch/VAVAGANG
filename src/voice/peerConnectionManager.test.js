@@ -35,6 +35,8 @@ test("ICE recebido antes da descrição remota fica pendente no peer correto", a
   const { PeerConnectionManager } = await import("./peerConnectionManager.js");
   const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
   await manager.handleCandidate({ id: "candidate-1", from: "b", to: "a", callSessionId: "call", sessionId: "peer-session", candidate: { candidate: "candidate" } });
+  manager.syncParticipants([{ uid: "b", callSessionId: "call" }]);
+  await Promise.all([...manager.creationLocks.values()]);
   assert.equal(manager.peers.get("b").pendingCandidates.length, 1);
   assert.equal(manager.peers.get("b").pendingCandidates[0].sessionId, "peer-session");
   manager.close();
