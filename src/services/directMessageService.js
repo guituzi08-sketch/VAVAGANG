@@ -1,4 +1,4 @@
-import { addDoc, collection, onSnapshot, query, where, orderBy, serverTimestamp, updateDoc, doc } from "firebase/firestore";
+import { addDoc, collection, onSnapshot, query, where, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
 import { isBlocked } from "./friendService";
 import { createNotification } from "./notificationService";
@@ -9,13 +9,28 @@ export function conversationId(firstUid, secondUid) {
 }
 
 export function subscribeToDirectMessages(userId, contactId, onChange, onError) {
-  return onSnapshot(query(collection(db, "directMessages"), where("conversationId", "==", conversationId(userId, contactId)), orderBy("createdAt", "asc")), (snapshot) => {
-    onChange(snapshot.docs.map((message) => ({ id: message.id, ...message.data() })));
+  const currentConversationId = conversationId(userId, contactId);
+  const messagesBySource = { sent: new Map(), received: new Map() };
+  const publish = () => onChange([...messagesBySource.sent.values(), ...messagesBySource.received.values()]
+    .filter((message) => message.conversationId === currentConversationId)
+    .sort((first, second) => timestampValue(first.createdAt) - timestampValue(second.createdAt)));
+  const unsubscribeSent = onSnapshot(query(collection(db, "directMessages"), where("senderId", "==", userId)), (snapshot) => {
+    messagesBySource.sent.clear();
+    snapshot.docs.forEach((message) => messagesBySource.sent.set(message.id, { id: message.id, ...message.data() }));
+    publish();
   }, onError);
+  const unsubscribeReceived = onSnapshot(query(collection(db, "directMessages"), where("recipientId", "==", userId)), (snapshot) => {
+    messagesBySource.received.clear();
+    snapshot.docs.forEach((message) => messagesBySource.received.set(message.id, { id: message.id, ...message.data() }));
+    publish();
+  }, onError);
+  return () => { unsubscribeSent(); unsubscribeReceived(); };
 }
 
 export function subscribeToUnreadDirectMessages(userId, onChange, onError) {
-  return onSnapshot(query(collection(db, "directMessages"), where("recipientId", "==", userId), where("read", "==", false)), (snapshot) => onChange(snapshot.size), onError);
+  return onSnapshot(query(collection(db, "directMessages"), where("recipientId", "==", userId)), (snapshot) => {
+    onChange(snapshot.docs.filter((message) => message.data().read === false).length);
+  }, onError);
 }
 
 export async function sendDirectMessage(sender, recipient, text) {
@@ -44,4 +59,8 @@ export async function sendDirectMessage(sender, recipient, text) {
 
 export async function markDirectMessageRead(messageId) {
   await updateDoc(doc(db, "directMessages", messageId), { read: true });
+}
+
+function timestampValue(timestamp) {
+  return typeof timestamp?.toMillis === "function" ? timestamp.toMillis() : 0;
 }

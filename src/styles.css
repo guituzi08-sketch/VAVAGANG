@@ -503,5 +503,6 @@ body::after { opacity: .018; background: repeating-linear-gradient(0deg, transpa
 .private-chat-overlay { border-color: #a80f2b; background: #140d11f7; box-shadow: 0 26px 90px #000, 0 0 35px #a80f2b33; }
 .private-message.outgoing { background: linear-gradient(135deg, #ba1738, #720b21); }
 .screen-share-viewer { border-color: #d8c9bc; }
+.private-chat-error { max-width: 100%; margin: 0; color: var(--danger); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 
 @media (max-width: 800px) { .home-intro { clip-path: polygon(0 14px, 14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px)); } .home-arena { right: 0; bottom: -40px; } }

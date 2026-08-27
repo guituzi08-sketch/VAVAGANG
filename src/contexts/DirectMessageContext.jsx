@@ -11,16 +11,22 @@ export function DirectMessageProvider({ children }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState("");
 
+  function handleFirestoreError(snapshotError) {
+    setError(snapshotError.code === "failed-precondition"
+      ? "O chat privado está temporariamente indisponível. Tente novamente."
+      : snapshotError.message || "Não foi possível carregar as mensagens.");
+  }
+
   useEffect(() => {
     if (!firebaseUser) return undefined;
-    return subscribeToUnreadDirectMessages(firebaseUser.uid, setUnreadCount, (snapshotError) => setError(snapshotError.message));
+    return subscribeToUnreadDirectMessages(firebaseUser.uid, setUnreadCount, handleFirestoreError);
   }, [firebaseUser]);
   useEffect(() => {
     if (!firebaseUser || !contact?.uid) { setMessages([]); return undefined; }
     return subscribeToDirectMessages(firebaseUser.uid, contact.uid, (nextMessages) => {
       setMessages(nextMessages);
       nextMessages.filter((message) => message.recipientId === firebaseUser.uid && !message.read).forEach((message) => markDirectMessageRead(message.id).catch(() => {}));
-    }, (snapshotError) => setError(snapshotError.message));
+    }, handleFirestoreError);
   }, [firebaseUser, contact]);
 
   async function sendMessage(text) {
