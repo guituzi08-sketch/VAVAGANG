@@ -59,6 +59,28 @@ test("mesh de oito participantes cria sete peers e remove apenas quem saiu", asy
   manager.close();
 });
 
+test("malha de três participantes cria todos os pares e envia cada microfone", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const participants = ["a", "b", "c"].map((uid) => ({ uid, callSessionId: `${uid}-session` }));
+  const managers = new Map(participants.map((participant) => [participant.uid, new PeerConnectionManager({
+    db: {},
+    roomId: "room",
+    localUid: participant.uid,
+    callSessionId: `${participant.uid}-call`,
+    localStream: new FakeMediaStream([{ kind: "audio", id: `${participant.uid}-microphone` }]),
+    onRemoteStream() {},
+    onPeerState() {},
+    onError() {},
+  })]));
+  managers.forEach((manager) => manager.syncParticipants(participants));
+  await Promise.all([...managers.values()].flatMap((manager) => [...manager.creationLocks.values()]));
+  assert.deepEqual([...managers.get("a").peers.keys()].sort(), ["b", "c"]);
+  assert.deepEqual([...managers.get("b").peers.keys()].sort(), ["a", "c"]);
+  assert.deepEqual([...managers.get("c").peers.keys()].sort(), ["a", "b"]);
+  managers.forEach((manager) => manager.peers.forEach((state) => assert.equal(state.pc.getSenders().find((sender) => sender.track?.kind === "audio")?.track.id, `${manager.localUid}-microphone`)));
+  managers.forEach((manager) => manager.close());
+});
+
 test("ignora sinal de sessão remota antiga", async () => {
   const { PeerConnectionManager } = await import("./peerConnectionManager.js");
   const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
