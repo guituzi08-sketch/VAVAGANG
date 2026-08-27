@@ -299,3 +299,91 @@ h1 em, .home-intro h1 em { color: var(--blue-bright); text-shadow: 0 0 26px #e32
 @media (prefers-reduced-motion: reduce) {
 	*, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* Cyberpunk HUD layer */
+:root {
+	--cyber-red: #ff1744;
+	--cyber-red-hot: #ff4868;
+	--cyber-cyan: #00e5ff;
+	--cyber-magenta: #ff2bd6;
+	--cyber-black: #050608;
+}
+
+body {
+	background-color: var(--cyber-black);
+	background-image: linear-gradient(#00e5ff06 1px, transparent 1px), linear-gradient(90deg, #00e5ff06 1px, transparent 1px), radial-gradient(800px 480px at 88% 0, #ff174428, transparent 64%), radial-gradient(580px 360px at 0 100%, #ff2bd614, transparent 68%);
+	background-size: 38px 38px, 38px 38px, auto, auto;
+}
+
+body::after { position: fixed; z-index: 100; inset: 0; pointer-events: none; content: ""; opacity: .045; background: repeating-linear-gradient(0deg, transparent 0 3px, #fff 4px); mix-blend-mode: screen; }
+.topbar, .room-topbar, .navigation-header, .settings-topbar, .vavagran-topbar { background: #07080bf2; border-color: #3b1722; box-shadow: 0 1px 0 #00e5ff15, 0 10px 35px #0008; }
+.topbar::after, .room-topbar::after, .settings-topbar::after { width: 18%; height: 2px; content: ""; background: linear-gradient(90deg, var(--cyber-red), var(--cyber-cyan), transparent); box-shadow: 0 0 14px var(--cyber-red); }
+.brand-mark, .navigation-header strong { font-family: 'DM Mono', monospace; }
+.brand-mark { color: #eafcff; text-shadow: 0 0 12px #00e5ff88; }
+.brand-mark svg { color: var(--cyber-cyan); }
+.eyebrow, .section-label, .number { color: var(--cyber-cyan); text-shadow: 0 0 9px #00e5ff66; }
+.muted { color: #9ba8b0; }
+
+.workspace-shell { background: #07080a; }
+.community-rail { background: linear-gradient(180deg, #080a0df5, #10070af5); border-color: #321924; }
+.rail-logo { position: relative; color: #fff; background: var(--cyber-red); border: 1px solid #ff8b9d; box-shadow: 0 0 0 3px #ff174415, 0 0 30px #ff174477, 5px 5px 0 #00e5ff66; }
+.rail-logo::before { position: absolute; right: -6px; bottom: -6px; width: 9px; height: 9px; border-right: 2px solid var(--cyber-cyan); border-bottom: 2px solid var(--cyber-cyan); content: ""; }
+.rail-button { border-color: #2d2830; }
+.rail-button:hover, .rail-button.active, .rail-logo:hover { color: #fff; border-color: var(--cyber-cyan); background: #21101a; box-shadow: 0 0 20px #ff174433, inset 0 0 14px #00e5ff12; }
+.navigation-panel { background: #0b0b0eeF; border-color: #321924; }
+.navigation-header strong { color: #e8faff; letter-spacing: .2em; }
+.nav-item { font-family: 'DM Mono', monospace; font-size: 11px; }
+.nav-item:hover { color: #fff; background: #23101a; }
+.nav-item.active { color: #fff; border-color: #ff174488; background: linear-gradient(90deg, #4c0d1b, #180b12); box-shadow: inset 3px 0 var(--cyber-red), 0 0 18px #ff174418; }
+.nav-item.active::after { margin-left: auto; color: var(--cyber-cyan); content: "//"; font-weight: 400; }
+.nav-item:hover svg, .nav-item.active svg { color: var(--cyber-cyan); filter: drop-shadow(0 0 5px #00e5ff99); }
+.channel-heading, .nav-caption { color: #7b7180; }
+.footer-user span, .context-live, .chat-live { color: var(--cyber-cyan); }
+
+.home-content, .social-content, .voice-channel-page, .workspace-page { background: transparent; }
+.home-intro { border-color: #7c1a31; background: linear-gradient(115deg, #190a10, #08090c 52%, #160915); box-shadow: 0 0 0 1px #00e5ff0d, 0 28px 70px #000, inset 0 0 65px #ff174418; clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px)); }
+.home-intro::after { position: absolute; top: 18px; right: 27%; width: 90px; height: 2px; content: ""; background: var(--cyber-cyan); box-shadow: 0 0 14px var(--cyber-cyan); transform: skewX(-45deg); }
+.home-intro h1 { font-family: 'DM Mono', monospace; font-size: clamp(42px, 5.7vw, 78px); letter-spacing: -.04em; text-shadow: 3px 4px 0 #510919, 0 0 26px #ff174455; }
+.home-intro h1 em { color: var(--cyber-red-hot); text-shadow: 0 0 18px #ff1744aa; }
+.profile-chip { border-color: var(--cyber-cyan); }
+.profile-chip .avatar { border-color: var(--cyber-cyan); box-shadow: 0 0 13px #00e5ff55; }
+.home-arena { filter: drop-shadow(0 0 18px #ff174433); }
+.arena-grid { background-image: linear-gradient(#ff174455 1px, transparent 1px), linear-gradient(90deg, #00e5ff55 1px, transparent 1px); }
+.arena-ring { border-color: #ff1744cc; box-shadow: 0 0 30px #ff174477, inset 0 0 22px #00e5ff33; }
+.arena-ring::before { border-color: var(--cyber-cyan); }
+.arena-ring::after { border-color: var(--cyber-magenta); }
+.arena-core { background: linear-gradient(145deg, #ff4868, #8e0927); border-color: #ffb2bd; box-shadow: 0 0 38px #ff1744cc, 0 14px 0 #4f0915, 0 0 65px #00e5ff44, inset 0 0 18px #fff7; }
+.arena-label { color: var(--cyber-cyan); text-shadow: 0 0 9px #00e5ff; }
+
+.hub-overview, .voice-roster, .room-chat, .workspace-empty, .person-row, .notification-row, .conversation-row, .search-result, .group-card, .group-channel-list, .group-overview, .setting-card, .vavagram-profile-card, .story-strip, .vavagram-post, .vavax-profile, .vavax-post, .vavax-empty, .sound-effects-panel { border-color: #42212c; background: linear-gradient(135deg, #160d10, #090a0c); }
+.hub-overview::before { background: linear-gradient(90deg, transparent, var(--cyber-cyan), var(--cyber-red), transparent); box-shadow: 0 0 20px var(--cyber-cyan); }
+.hub-heading, .voice-section-title svg, .voice-section-title b { color: var(--cyber-cyan); }
+.hub-panel:hover, .person-row:hover, .conversation-row:hover, .group-card:hover, .voice-participant:hover { border-color: var(--cyber-cyan); background: #1d0e15; box-shadow: 0 0 22px #00e5ff18; }
+.hub-panel::after { border-color: #00e5ff44; }
+.room-row { border-color: #3a2029; background: #0d0b0e; }
+.room-row:hover { border-color: var(--cyber-red-hot); background: #2a0e17; box-shadow: -8px 12px 0 #530a19, 0 0 22px #ff174433; }
+.room-icon, .empty-icon, .group-card-icon { color: var(--cyber-cyan); border-color: #00e5ff88; background: #00e5ff12; }
+.join-button { color: #fff; border-color: var(--cyber-red); background: #4c0e1d; }
+.primary-button, .join-button { background: linear-gradient(135deg, #f11942, #970c28); }
+.primary-button:hover, .join-button:hover { background: linear-gradient(135deg, #ff4d69, #c91238); box-shadow: 0 0 24px #ff174466; }
+.secondary-button { border-color: #5a3340; background: #170e12; }
+.secondary-button:hover { border-color: var(--cyber-cyan); background: #121d21; box-shadow: 0 0 18px #00e5ff22; }
+.icon-button:hover, .settings-close:hover { border-color: var(--cyber-cyan); color: var(--cyber-cyan); background: #131d21; box-shadow: 0 0 13px #00e5ff33; }
+.input-row:focus-within, .room-message-form input:focus, .channel-message-form input:focus { border-color: var(--cyber-cyan); box-shadow: 0 5px 22px #00e5ff18; }
+.modal-input, .social-search, .global-search-large, .vavagram-search { border-color: #4b2a35; background: #0c0a0c; }
+.modal-input:focus, .social-search:focus-within, .global-search-large:focus-within, .vavagram-search:focus-within { border-color: var(--cyber-cyan); box-shadow: 0 0 18px #00e5ff18; }
+
+.voice-channel-state, .screen-share-label { color: var(--cyber-cyan); }
+.live-dot, .pulse-dot, .presence-dot { background: var(--cyber-red); box-shadow: 0 0 0 4px #ff174422, 0 0 16px #ff174499; }
+.control-button:hover, .control-button.active { border-color: var(--cyber-cyan); background: #172329; box-shadow: 0 0 18px #00e5ff33; }
+.control-button.off, .voice-mini-actions .is-muted, .voice-mini-actions .voice-leave { color: var(--cyber-red-hot); border-color: var(--cyber-red); }
+.private-chat-overlay { border-color: var(--cyber-red); background: #11090cf7; box-shadow: 0 26px 90px #000, 0 0 38px #ff174433; }
+.private-message.outgoing { background: linear-gradient(135deg, #d81338, #8e0b26); }
+.screen-share-viewer { border-color: var(--cyber-cyan); box-shadow: 0 0 25px #00e5ff22; }
+.sound-effect-button { border-color: color-mix(in srgb, var(--cyber-red) 70%, var(--line)); }
+
+@media (max-width: 800px) {
+	.home-intro { clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px)); }
+	.home-intro::after { right: 12%; }
+	.topbar::after, .room-topbar::after, .settings-topbar::after { display: none; }
+}
