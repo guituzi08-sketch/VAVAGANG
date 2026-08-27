@@ -42,7 +42,10 @@ function VoiceChannelContent({ roomId }) {
   const [roomName, setRoomName] = useState("");
   const [isCameraBusy, setIsCameraBusy] = useState(false);
 
-  useEffect(() => { enterCall(roomId); }, [roomId]);
+  useEffect(() => {
+    enterCall(roomId);
+    return () => { exitCall(); };
+  }, [roomId]);
   useEffect(() => {
     if (!roomId) return undefined;
     return subscribeToRoom(roomId, (room) => setRoomName(room?.name ?? ""), () => setRoomName(""));
