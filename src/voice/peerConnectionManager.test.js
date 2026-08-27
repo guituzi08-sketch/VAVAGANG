@@ -12,7 +12,9 @@ class FakeMediaStream {
 
 class FakePeerConnection {
   constructor() { this.connectionState = "new"; this.signalingState = "stable"; this.iceConnectionState = "new"; this.senders = []; }
+  addTrack(track) { const transceiver = this.addTransceiver(); transceiver.sender.track = track; return transceiver.sender; }
   addTransceiver() { const sender = { replaceTrack: async (track) => { sender.track = track; } }; this.senders.push(sender); return { sender, receiver: { track: null } }; }
+  getTransceivers() { return this.senders.map((sender) => ({ sender, receiver: { track: null } })); }
   getSenders() { return this.senders; }
   close() { this.connectionState = "closed"; }
 }

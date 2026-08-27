@@ -44,12 +44,14 @@ export class PeerConnectionManager {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
     const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), localOfferId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
-    const audio = pc.addTransceiver("audio", { direction: "sendrecv" });
+    const localAudioTrack = this.localStream.getAudioTracks()[0] ?? null;
+    const audioSender = localAudioTrack ? pc.addTrack(localAudioTrack, this.localStream) : null;
+    const audio = audioSender ? pc.getTransceivers().find((transceiver) => transceiver.sender === audioSender) : pc.addTransceiver("audio", { direction: "sendrecv" });
+    const screenAudio = pc.addTransceiver("audio", { direction: "sendrecv" });
     const camera = pc.addTransceiver("video", { direction: "sendrecv" });
     const screen = pc.addTransceiver("video", { direction: "sendrecv" });
-    const screenAudio = pc.addTransceiver("audio", { direction: "sendrecv" });
     state.transceivers = { audio, camera, screen, screenAudio };
-    await audio.sender.replaceTrack(this.localStream.getAudioTracks()[0] ?? null);
+    if (!audioSender) await audio.sender.replaceTrack(null);
     pc.ontrack = (event) => this.handleTrack(state, event);
     pc.onicecandidate = ({ candidate }) => candidate && sendCandidate(this.db, this.roomId, { from: this.localUid, to: remoteUid, callSessionId: this.callSessionId, sessionId: state.localSessionId, candidate: candidate.toJSON() }).catch((error) => this.reportPeerError(error, remoteUid));
     pc.onconnectionstatechange = () => this.handleConnectionState(state);
