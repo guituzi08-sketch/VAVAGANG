@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -53,8 +53,14 @@ jobs:
           test -n "$VITE_SUPABASE_URL" || (echo "Missing VITE_SUPABASE_URL" && exit 1)
           test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || (echo "Missing VITE_SUPABASE_PUBLISHABLE_KEY" && exit 1)
 
+      - name: Run tests
+        run: npm test
+
       - name: Build application
         run: npm run build
+
+      - name: Validate Pages artifact
+        run: test -s dist/index.html
 
       - name: Prepare SPA fallback
         run: cp dist/index.html dist/404.html
