@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
 import { useSoundEffects } from "../contexts/SoundEffectsContext";
-import { sendRoomMessage, subscribeToRoomMessages } from "../services/roomService";
+import { sendRoomMessage, subscribeToRoom, subscribeToRoomMessages } from "../services/roomService";
 import ScreenShareViewer from "./ScreenShareViewer";
 
 export default function VoiceChannelPage({ roomId }) {
@@ -36,8 +36,10 @@ function VoiceChannelContent({ roomId }) {
   const [volumeTarget, setVolumeTarget] = useState(null);
   const [soundName, setSoundName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [roomName, setRoomName] = useState("");
 
   useEffect(() => { enterCall(roomId); }, [roomId]);
+  useEffect(() => subscribeToRoom(roomId, (room) => setRoomName(room?.name ?? ""), () => setRoomName("")), [roomId]);
   useEffect(() => subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(error.message)), [roomId]);
   useEffect(() => {
     if (!roomClosed) return;
@@ -66,7 +68,7 @@ function VoiceChannelContent({ roomId }) {
 
   const sharedScreens = Object.entries(remoteScreenStreams ?? {}).filter(([, stream]) => stream.getVideoTracks().length > 0);
   return <div className="voice-channel-page">
-    <header className="voice-channel-header"><div><p className="eyebrow">Canal de voz</p><h1><span className="voice-glyph">🔊</span> {roomId}</h1><p className="muted">Conversa ao vivo com sua comunidade.</p></div><div className="voice-channel-state"><span className="live-dot" />{isConnecting ? "conectando" : "voz ativa"}</div></header>
+    <header className="voice-channel-header"><div><p className="eyebrow">Canal de voz</p><h1><span className="voice-glyph">🔊</span> {roomName || roomId}</h1><p className="muted">Conversa ao vivo com sua comunidade.</p></div><div className="voice-channel-state"><span className="live-dot" />{isConnecting ? "conectando" : "voz ativa"}</div></header>
     {screenStream && <section className="screen-share-stage"><ScreenShareViewer stream={screenStream} label="Você está compartilhando a tela" muted /></section>}
     {sharedScreens.map(([uid, stream]) => <section className="screen-share-stage" key={uid}><ScreenShareViewer stream={stream} label={`${participants.find((participant) => participant.uid === uid)?.displayName ?? "Participante"} está compartilhando a tela`} /></section>)}
     <div className="voice-channel-grid">
