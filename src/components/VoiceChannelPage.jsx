@@ -141,16 +141,28 @@ function RemoteAudio({ userId, stream, volume, onBlocked }) {
     audio.autoplay = true;
     audio.muted = false;
     audio.volume = volume;
+    const playRemoteAudio = () => {
+      if (!stream.getAudioTracks().some((track) => track.readyState === "live")) return;
+      audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { userId }))
+        .catch((error) => {
+          console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { userId, name: error.name, message: error.message });
+          if (error.name !== "AbortError") onBlocked();
+        });
+    };
+    const audioTrack = stream.getAudioTracks()[0];
+    audio.addEventListener("loadedmetadata", playRemoteAudio);
+    audio.addEventListener("canplay", playRemoteAudio);
+    audioTrack?.addEventListener("unmute", playRemoteAudio);
     console.info("[VOICE DEBUG] REMOTE STREAM ATTACHED", { userId, streamId: stream.id, tracks: stream.getTracks().length, audioTracks: stream.getAudioTracks().length });
     console.info("[VOICE DEBUG] REMOTE AUDIO ELEMENT", { userId, exists: Boolean(audio), srcObject: audio.srcObject !== null, paused: audio.paused, muted: audio.muted, volume: audio.volume, readyState: audio.readyState, autoplay: audio.autoplay });
     console.info("[VOICE DEBUG] REMOTE AUDIO STATE", { userId, muted: audio.muted, volume: audio.volume, paused: audio.paused, readyState: audio.readyState });
-    console.info("[VOICE DEBUG] REMOTE AUDIO PLAY ATTEMPT", { userId });
-    audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { userId })).catch((error) => {
-      console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { userId, name: error.name, message: error.message });
-      if (error.name === "NotAllowedError") console.warn("[VOICE DEBUG] AUTOPLAY BLOCKED", { userId });
-      if (error.name !== "AbortError") onBlocked();
-    });
-    return () => { audio.srcObject = null; };
+    playRemoteAudio();
+    return () => {
+      audio.removeEventListener("loadedmetadata", playRemoteAudio);
+      audio.removeEventListener("canplay", playRemoteAudio);
+      audioTrack?.removeEventListener("unmute", playRemoteAudio);
+      audio.srcObject = null;
+    };
   }, [stream, userId]);
   useEffect(() => {
     if (audioRef.current) {
