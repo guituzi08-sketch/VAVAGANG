@@ -12,6 +12,12 @@ service cloud.firestore {
           || exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)));
     }
 
+    function peerKey(firstUid, secondUid) {
+      return firstUid < secondUid
+        ? firstUid + '::' + secondUid
+        : secondUid + '::' + firstUid;
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == userId;
@@ -202,6 +208,8 @@ service cloud.firestore {
         allow create, update: if signedIn()
           && request.resource.data.from == request.auth.uid
           && request.resource.data.to != request.auth.uid
+          && request.resource.data.peerKey == peerKey(request.resource.data.from, request.resource.data.to)
+          && request.resource.data.sessionId != null
           && exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.to))
           && get(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)).data.callSessionId == request.resource.data.callSessionId
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
@@ -213,6 +221,8 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.resource.data.from == request.auth.uid
           && request.resource.data.to != request.auth.uid
+          && request.resource.data.peerKey == peerKey(request.resource.data.from, request.resource.data.to)
+          && request.resource.data.sessionId != null
           && exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.to))
           && get(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)).data.callSessionId == request.resource.data.callSessionId
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';

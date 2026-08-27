@@ -50,7 +50,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, peerKey: peerKey(this.localUid, remoteUid), pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), localOfferId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, peerKey: peerKey(this.localUid, remoteUid), pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), localOfferId: null, localOfferRevision: 0, remoteOfferRevision: 0, remoteSessionId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const localAudioTrack = this.localStream.getAudioTracks()[0] ?? null;
     const audioSender = localAudioTrack ? pc.addTrack(localAudioTrack, this.localStream) : null;
@@ -66,7 +66,10 @@ export class PeerConnectionManager {
       console.info("[WebRTC] peer state", { localUser: this.localUid, remoteUser: remoteUid, peerKey: state.peerKey, signalingState: pc.signalingState, connectionState: pc.connectionState, iceConnectionState: pc.iceConnectionState });
       this.handleConnectionState(state);
     };
-    pc.oniceconnectionstatechange = () => { if (["failed", "disconnected"].includes(pc.iceConnectionState)) this.recover(state); };
+    pc.oniceconnectionstatechange = () => {
+      console.info("[WebRTC] ICE state", { localUser: this.localUid, remoteUser, peerKey: state.peerKey, callSessionId: this.callSessionId, iceConnectionState: pc.iceConnectionState, signalingState: pc.signalingState, connectionState: pc.connectionState });
+      if (["failed", "disconnected"].includes(pc.iceConnectionState)) this.recover(state);
+    };
     if (shouldOffer) await this.negotiate(state);
     return state;
   }
@@ -92,8 +95,9 @@ export class PeerConnectionManager {
         const offer = await state.pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
         await state.pc.setLocalDescription(offer);
         state.localOfferId = createSessionId();
-        console.info("[WebRTC] offer", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: state.localOfferId, signalingState: state.pc.signalingState });
-        await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, peerKey: state.peerKey, type: "offer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: state.localOfferId, sdp: offer.sdp });
+        state.localOfferRevision += 1;
+        console.info("[WebRTC] offer", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: state.localOfferId, offerRevision: state.localOfferRevision, signalingState: state.pc.signalingState });
+        await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, peerKey: state.peerKey, type: "offer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: state.localOfferId, offerRevision: state.localOfferRevision, sdp: offer.sdp });
       } finally { state.makingOffer = false; }
     }).catch((error) => this.reportPeerError(error, state.remoteUid));
     return state.negotiation;
@@ -128,6 +132,15 @@ export class PeerConnectionManager {
   }
 
   async handleOffer(state, signal) {
+    const offerRevision = Number(signal.offerRevision ?? 0);
+    if (state.remoteSessionId && signal.sessionId !== state.remoteSessionId) {
+      console.warn("[WebRTC] stale offer ignored: wrong remote session", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, expectedSessionId: state.remoteSessionId, receivedSessionId: signal.sessionId });
+      return;
+    }
+    if (offerRevision && offerRevision <= state.remoteOfferRevision) {
+      console.warn("[WebRTC] stale offer ignored: old revision", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, offerRevision, lastOfferRevision: state.remoteOfferRevision });
+      return;
+    }
     const collision = state.makingOffer || state.pc.signalingState !== "stable";
     state.ignoreOffer = !state.polite && collision;
     if (state.ignoreOffer) return;
@@ -135,16 +148,17 @@ export class PeerConnectionManager {
     await state.pc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
     state.remoteDescriptionSet = true;
     state.remoteSessionId = signal.sessionId;
+    state.remoteOfferRevision = offerRevision;
     await this.flushCandidates(state);
     const answer = await state.pc.createAnswer();
     await state.pc.setLocalDescription(answer);
-    console.info("[WebRTC] answer", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: signal.offerId ?? signal.sessionId, signalingState: state.pc.signalingState });
-    await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, peerKey: state.peerKey, type: "answer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: signal.offerId ?? signal.sessionId, sdp: answer.sdp });
+    console.info("[WebRTC] answer", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: signal.offerId ?? signal.sessionId, offerRevision, signalingState: state.pc.signalingState });
+    await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, peerKey: state.peerKey, type: "answer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: signal.offerId ?? signal.sessionId, offerRevision, sdp: answer.sdp });
   }
 
   async handleAnswer(state, signal) {
-    if (signal.offerId !== state.localOfferId || state.pc.signalingState !== "have-local-offer") return;
-    console.info("[WebRTC] answer received", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: signal.offerId, signalingState: state.pc.signalingState });
+    if (signal.offerId !== state.localOfferId || (signal.offerRevision && Number(signal.offerRevision) !== state.localOfferRevision) || state.pc.signalingState !== "have-local-offer") return;
+    console.info("[WebRTC] answer received", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: signal.offerId, offerRevision: signal.offerRevision ?? 0, signalingState: state.pc.signalingState });
     await state.pc.setRemoteDescription({ type: "answer", sdp: signal.sdp });
     state.remoteDescriptionSet = true;
     state.remoteSessionId = signal.sessionId;
@@ -154,6 +168,7 @@ export class PeerConnectionManager {
   async handleCandidate(candidate) {
     if (candidate.from === this.localUid) return;
     const expectedPeerKey = peerKey(this.localUid, candidate.from);
+    console.info("[WebRTC] ICE received", { localUser: this.localUid, remoteUser: candidate.from, peerKey: expectedPeerKey, callSessionId: candidate.callSessionId, candidateSessionId: candidate.sessionId });
     if (candidate.peerKey && candidate.peerKey !== expectedPeerKey) {
       console.warn("[WebRTC] ICE ignored: wrong peerKey", { localUser: this.localUid, remoteUser: candidate.from, expectedPeerKey, receivedPeerKey: candidate.peerKey });
       return;
@@ -168,6 +183,10 @@ export class PeerConnectionManager {
     state.signaling = state.signaling.then(async () => {
       if (state.processedCandidates.has(candidate.id)) return;
       state.processedCandidates.add(candidate.id);
+      if (state.remoteSessionId && candidate.sessionId !== state.remoteSessionId) {
+        console.warn("[WebRTC] ICE ignored: stale remote session", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, expectedSessionId: state.remoteSessionId, receivedSessionId: candidate.sessionId });
+        return;
+      }
       if (!state.remoteDescriptionSet) state.pendingCandidates.push(candidate);
       else await state.pc.addIceCandidate(candidate.candidate).then(() => console.info("[WebRTC] ICE applied", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, candidateSessionId: candidate.sessionId })).catch((error) => this.reportPeerError(error, state.remoteUid));
     }).catch((error) => this.reportPeerError(error, state.remoteUid));
