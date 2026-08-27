@@ -71,6 +71,16 @@ test("ignora sinal de sessão remota antiga", async () => {
   manager.close();
 });
 
+test("ignora ICE destinado a outro peer", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
+  manager.syncParticipants([{ uid: "b", callSessionId: "call" }, { uid: "c", callSessionId: "call" }]);
+  await Promise.all([...manager.creationLocks.values()]);
+  await manager.handleCandidate({ id: "wrong-peer", from: "b", to: "a", peerKey: "a::c", callSessionId: "call", sessionId: "peer-session", candidate: {} });
+  assert.equal(manager.peers.get("b").pendingCandidates.length, 0);
+  manager.close();
+});
+
 test("renegociação substitui a track remota anterior do mesmo tipo", async () => {
   const { PeerConnectionManager } = await import("./peerConnectionManager.js");
   const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
