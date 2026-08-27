@@ -24,8 +24,15 @@ export function DirectMessageProvider({ children }) {
   }, [firebaseUser, contact]);
 
   async function sendMessage(text) {
-    if (!firebaseUser || !contact) return;
-    await sendDirectMessage(firebaseUser, contact, text);
+    if (!firebaseUser) throw new Error("Sua sessão expirou. Entre novamente para enviar mensagens.");
+    if (!contact?.uid) throw new Error("O destinatário desta conversa não está disponível.");
+    try {
+      await sendDirectMessage(firebaseUser, contact, text);
+    } catch (sendError) {
+      console.error("[DirectMessage] falha ao enviar mensagem", sendError);
+      setError(sendError.message || "Não foi possível enviar a mensagem.");
+      throw sendError;
+    }
   }
 
   return <DirectMessageContext.Provider value={{ contact, messages, unreadCount, error, openPrivateChat: setContact, closePrivateChat: () => setContact(null), sendMessage }}>{children}</DirectMessageContext.Provider>;

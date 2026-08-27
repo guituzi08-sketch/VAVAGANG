@@ -4,6 +4,7 @@ import { isBlocked } from "./friendService";
 import { createNotification } from "./notificationService";
 
 export function conversationId(firstUid, secondUid) {
+  if (!firstUid || !secondUid || firstUid === secondUid) throw new Error("Não foi possível identificar os participantes desta conversa.");
   return [firstUid, secondUid].sort().join("_");
 }
 
@@ -18,11 +19,14 @@ export function subscribeToUnreadDirectMessages(userId, onChange, onError) {
 }
 
 export async function sendDirectMessage(sender, recipient, text) {
-  const cleanText = text.trim();
+  if (!sender?.uid) throw new Error("Sua sessão não está pronta para enviar mensagens.");
+  if (!recipient?.uid || recipient.uid === sender.uid) throw new Error("Selecione um destinatário válido.");
+  const cleanText = typeof text === "string" ? text.trim() : "";
   if (!cleanText) return;
   if (await isBlocked(sender.uid, recipient.uid)) throw new Error("Esta interação está bloqueada.");
+  const currentConversationId = conversationId(sender.uid, recipient.uid);
   await addDoc(collection(db, "directMessages"), {
-    conversationId: conversationId(sender.uid, recipient.uid),
+    conversationId: currentConversationId,
     senderId: sender.uid,
     senderName: sender.nickname || sender.displayName || sender.email || "Jogador",
     recipientId: recipient.uid,
@@ -31,7 +35,11 @@ export async function sendDirectMessage(sender, recipient, text) {
     read: false,
     createdAt: serverTimestamp(),
   });
-  await createNotification({ recipientId: recipient.uid, senderId: sender.uid, type: "direct_message", title: "Nova mensagem privada", message: `${sender.nickname || sender.displayName || "Usuário"} enviou uma mensagem.`, metadata: { conversationId: conversationId(sender.uid, recipient.uid) } });
+  try {
+    await createNotification({ recipientId: recipient.uid, senderId: sender.uid, type: "direct_message", title: "Nova mensagem privada", message: `${sender.nickname || sender.displayName || "Usuário"} enviou uma mensagem.`, metadata: { conversationId: currentConversationId } });
+  } catch (notificationError) {
+    console.error("[DirectMessage] mensagem salva, mas a notificação falhou", notificationError);
+  }
 }
 
 export async function markDirectMessageRead(messageId) {

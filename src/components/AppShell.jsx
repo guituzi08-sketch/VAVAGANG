@@ -35,6 +35,7 @@ export default function AppShell() {
   const { groups } = useSocial();
   const { unreadCount, contact, messages, closePrivateChat, sendMessage, error: directMessageError } = useDirectMessages();
   const [directText, setDirectText] = useState("");
+  const [isSendingDirectMessage, setSendingDirectMessage] = useState(false);
   useEffect(() => subscribeToRooms(setRooms, () => {}), []);
   useEffect(() => {
     function handleShortcut(event) {
@@ -66,7 +67,7 @@ export default function AppShell() {
       <section className="workspace-main"><Outlet /></section>
       <ContextPanel />
       {activeRoomId && <VoiceMiniPlayer onOpen={() => navigate(`/voice/${activeRoomId}`)} />}
-      {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); await sendMessage(directText); setDirectText(""); }} />}
+      {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} isSending={isSendingDirectMessage} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); if (isSendingDirectMessage || !directText.trim()) return; setSendingDirectMessage(true); try { await sendMessage(directText); setDirectText(""); } catch {} finally { setSendingDirectMessage(false); } }} />}
   </div>;
 }
 
@@ -85,6 +86,6 @@ function VoiceMiniPlayer({ onOpen }) {
   return <aside className={`voice-mini-player ${sharedScreen ? "has-screen-share" : ""}`} aria-label="Chamada de voz ativa">{sharedScreen && <ScreenShareViewer stream={sharedScreen[1]} label="Tela compartilhada" compact />}{!sharedScreen && <div className="voice-mini-status"><span className="live-dot" /><div><strong>🔊 Sala ativa</strong><small>{isConnecting ? "Conectando..." : participantNames || activeRoomId}</small></div></div>}<div className="voice-mini-actions"><button className={`icon-button ${audioEnabled ? "" : "is-muted"}`} onClick={() => setAudioEnabled(toggleAudio())} title={audioEnabled ? "Silenciar microfone" : "Ativar microfone"}>{audioEnabled ? <Mic size={16} /> : <MicOff size={16} />}</button><button className="icon-button" onClick={onOpen} title="Voltar para o canal"><MoreHorizontal size={16} /></button><button className="icon-button voice-leave" onClick={exitCall} title="Sair da voz">×</button></div></aside>;
 }
 
-function PrivateChatOverlay({ contact, messages, error, text, setText, onClose, onSend }) {
-  return <aside className="private-chat-overlay" role="dialog" aria-label={`Conversa com ${contact.displayName}`}><header><div><span className="presence-dot" /><strong>{contact.displayName}</strong></div><button className="icon-button" onClick={onClose} title="Fechar conversa">×</button></header><div className="private-chat-messages">{messages.length === 0 && <p className="voice-empty">Comece uma conversa privada.</p>}{messages.map((message) => <article className={message.senderId === contact.uid ? "private-message incoming" : "private-message outgoing"} key={message.id}>{message.text}</article>)}</div>{error && <p className="error-message">{error}</p>}<form onSubmit={onSend}><input value={text} onChange={(event) => setText(event.target.value)} placeholder="Digite uma mensagem..." maxLength={500} /><button className="icon-button" disabled={!text.trim()} title="Enviar"><Send size={16} /></button></form></aside>;
+function PrivateChatOverlay({ contact, messages, error, text, setText, isSending, onClose, onSend }) {
+  return <aside className="private-chat-overlay" role="dialog" aria-label={`Conversa com ${contact.displayName ?? "usuário"}`}><header><div><span className="presence-dot" /><strong>{contact.displayName ?? "Usuário"}</strong></div><button className="icon-button" onClick={onClose} title="Fechar conversa">×</button></header><div className="private-chat-messages">{messages.length === 0 && <p className="voice-empty">Comece uma conversa privada.</p>}{messages.map((message) => <article className={message.senderId === contact.uid ? "private-message incoming" : "private-message outgoing"} key={message.id}>{message.text}</article>)}</div>{error && <p className="error-message">{error}</p>}<form onSubmit={onSend}><input value={text} onChange={(event) => setText(event.target.value)} placeholder="Digite uma mensagem..." maxLength={500} disabled={isSending} /><button className="icon-button" disabled={!text.trim() || isSending} title="Enviar"><Send size={16} /></button></form></aside>;
 }
