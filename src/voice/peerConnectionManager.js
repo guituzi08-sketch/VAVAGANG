@@ -1,5 +1,5 @@
 import { sendCandidate, sendSignal } from "./signalingService.js";
-import { PEER_STATES } from "./voiceState.js";
+import { createSessionId, PEER_STATES } from "./voiceState.js";
 
 const ICE_RESTART_DELAY = 1500;
 
@@ -37,7 +37,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), localSessionId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), localSessionId: createSessionId(), remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const audio = pc.addTransceiver("audio", { direction: "sendrecv" });
     const camera = pc.addTransceiver("video", { direction: "sendrecv" });

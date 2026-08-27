@@ -4,7 +4,7 @@ import { getRoom, joinRoom, leaveRoom, subscribeToParticipants, subscribeToRoom,
 import { requestCamera, requestMicrophone, requestScreen, stopMediaStream } from "../voice/localMediaManager";
 import { PeerConnectionManager } from "../voice/peerConnectionManager";
 import { subscribeToSignaling } from "../voice/signalingService";
-import { CALL_STATES } from "../voice/voiceState";
+import { CALL_STATES, createSessionId } from "../voice/voiceState";
 import { useAuth } from "./AuthContext";
 
 const CallContext = createContext(null);
@@ -63,7 +63,7 @@ export function CallProvider({ children }) {
       if (sessionRef.current) await leaveCurrentRoom();
       setCallState(CALL_STATES.REQUESTING_MEDIA); setMediaError("");
       const room = await getRoom(roomId); if (!room) throw new Error("Esta sala não existe mais.");
-      const callSessionId = crypto.randomUUID(); const stream = await requestMicrophone();
+      const callSessionId = createSessionId(); const stream = await requestMicrophone();
       localStreamRef.current = stream; setLocalStream(stream); setCallState(CALL_STATES.MEDIA_READY);
       await joinRoom(room.id, firebaseUser, profile, callSessionId);
       sessionRef.current = { roomId: room.id, callSessionId }; setActiveRoomId(room.id); setCallState(CALL_STATES.JOINING);

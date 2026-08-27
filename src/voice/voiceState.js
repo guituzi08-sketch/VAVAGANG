@@ -18,3 +18,7 @@ export const PEER_STATES = Object.freeze({
   FAILED: "failed",
   CLOSED: "closed",
 });
+
+export function createSessionId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}

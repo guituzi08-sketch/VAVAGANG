@@ -53,3 +53,15 @@ test("mesh de oito participantes cria sete peers e remove apenas quem saiu", asy
   assert.equal(peerB.pc.connectionState, "new");
   manager.close();
 });
+
+test("ignora sinal de sessão remota antiga", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
+  manager.syncParticipants([{ uid: "b", callSessionId: "new-session" }]);
+  await Promise.all([...manager.creationLocks.values()]);
+  const peer = manager.peers.get("b");
+  await manager.handleCandidate({ id: "old-candidate", from: "b", to: "a", callSessionId: "old-session", sessionId: "old-peer", candidate: {} });
+  assert.equal(peer.pendingCandidates.length, 0);
+  assert.equal(peer.pc.getSenders().length, 4);
+  manager.close();
+});
