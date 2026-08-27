@@ -137,13 +137,14 @@ export async function joinRoom(roomId, user, profile = {}, callSessionId = null)
   });
 }
 
-export async function leaveRoom(roomId, uid) {
+export async function leaveRoom(roomId, uid, callSessionId) {
   await runTransaction(db, async (transaction) => {
     const participantRef = doc(db, "rooms", roomId, "participants", uid);
     const roomRef = doc(db, "rooms", roomId);
     const participantSnapshot = await transaction.get(participantRef);
     const roomSnapshot = await transaction.get(roomRef);
     if (!participantSnapshot.exists() || !roomSnapshot.exists() || roomSnapshot.data().status === "closed") return;
+    if (callSessionId && participantSnapshot.data().callSessionId !== callSessionId) return;
     transaction.delete(participantRef);
     transaction.update(roomRef, { participantCount: increment(-1) });
   });

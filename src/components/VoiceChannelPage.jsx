@@ -140,7 +140,7 @@ function RemoteAudio({ userId, stream, volume, onBlocked }) {
       if (error.name !== "AbortError") onBlocked();
     });
     return () => { audio.srcObject = null; };
-  }, [stream, onBlocked]);
+  }, [stream, userId]);
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;

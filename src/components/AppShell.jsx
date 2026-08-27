@@ -1,4 +1,4 @@
-import { AtSign, Bell, Camera, Compass, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Settings, UsersRound } from "lucide-react";
+import { AtSign, Bell, Camera, Compass, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Send, Settings, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";

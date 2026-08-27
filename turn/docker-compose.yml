@@ -1,0 +1,20 @@
+services:
+  coturn:
+    image: coturn/coturn:4.6.3
+    container_name: vavagang-coturn
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --no-cli
+      - --fingerprint
+      - --lt-cred-mech
+      - --no-tls
+      - --no-dtls
+      - --realm=${TURN_REALM}
+      - --user=${TURN_USERNAME}:${TURN_PASSWORD}
+      - --listening-port=3478
+      - --min-port=49152
+      - --max-port=65535
+      - --external-ip=${TURN_EXTERNAL_IP}
+      - --no-multicast-peers
