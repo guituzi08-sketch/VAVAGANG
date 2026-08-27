@@ -161,9 +161,9 @@ export function CallProvider({ children }) {
       console.info("[VOICE DEBUG] connection state", remoteUid, peer.connectionState, peer.iceConnectionState, peer.iceGatheringState, peer.signalingState);
     };
 
+    await peer.readyPromise;
     if (shouldOffer) {
       peer.offerPromise = (async () => {
-        await peer.readyPromise;
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
         console.info("[VOICE DEBUG] offer audio", peer.localDescription?.sdp?.includes("m=audio"));
