@@ -39,3 +39,17 @@ test("ICE recebido antes da descrição remota fica pendente no peer correto", a
   assert.equal(manager.peers.get("b").pendingCandidates[0].sessionId, "peer-session");
   manager.close();
 });
+
+test("mesh de oito participantes cria sete peers e remove apenas quem saiu", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
+  manager.syncParticipants(["a", "b", "c", "d", "e", "f", "g", "h"].map((uid) => ({ uid, callSessionId: `${uid}-session` })));
+  await Promise.all([...manager.creationLocks.values()]);
+  assert.equal(manager.peers.size, 7);
+  const peerB = manager.peers.get("b");
+  manager.syncParticipants(["a", "b", "c", "d", "e", "f", "g"].map((uid) => ({ uid, callSessionId: `${uid}-session` })));
+  assert.equal(manager.peers.size, 6);
+  assert.equal(manager.peers.has("b"), true);
+  assert.equal(peerB.pc.connectionState, "new");
+  manager.close();
+});

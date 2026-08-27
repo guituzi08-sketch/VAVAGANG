@@ -37,7 +37,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, pc, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), localSessionId: crypto.randomUUID(), remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), localSessionId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const audio = pc.addTransceiver("audio", { direction: "sendrecv" });
     const camera = pc.addTransceiver("video", { direction: "sendrecv" });
@@ -131,7 +131,11 @@ export class PeerConnectionManager {
   syncParticipants(participants) {
     this.participantSessions = new Map(participants.filter((participant) => participant.uid !== this.localUid).map((participant) => [participant.uid, participant.callSessionId]));
     const remoteIds = new Set(participants.filter((participant) => participant.uid !== this.localUid).map((participant) => participant.uid));
-    participants.filter((participant) => participant.uid !== this.localUid).forEach((participant) => this.ensurePeer(participant.uid, this.localUid < participant.uid).catch(this.onError));
+    participants.filter((participant) => participant.uid !== this.localUid).forEach((participant) => {
+      const current = this.peers.get(participant.uid);
+      if (current && current.participantSessionId && current.participantSessionId !== participant.callSessionId) this.removePeer(participant.uid);
+      this.ensurePeer(participant.uid, this.localUid < participant.uid).then((state) => { state.participantSessionId = participant.callSessionId; }).catch(this.onError);
+    });
     [...this.peers.keys()].filter((uid) => !remoteIds.has(uid)).forEach((uid) => this.removePeer(uid));
   }
 
