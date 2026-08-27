@@ -55,6 +55,7 @@ export function CallProvider({ children }) {
   const pendingCandidates = useRef(new Map());
   const processedSignals = useRef(new Set());
   const callTokenRef = useRef(0);
+  const participantSharingRef = useRef(new Map());
 
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
   useEffect(() => { screenStreamRef.current = screenStream; }, [screenStream]);
@@ -136,8 +137,13 @@ export function CallProvider({ children }) {
       console.info("[VOICE DEBUG] REMOTE TRACK RECEIVED", { remoteUid, kind: event.track.kind, streamCount: event.streams.length });
       if (!stream.getTracks().some((track) => track.id === event.track.id)) stream.addTrack(event.track);
       if (isScreenTrack) console.info("[WebRTC][ScreenShare] track received", remoteUid, event.track.kind);
-      if (isScreenTrack) updateRemoteScreenStream(remoteUid, stream);
-      else updateRemoteStream(remoteUid, stream);
+      if (isScreenTrack) {
+        if (event.track.kind === "video" && participantSharingRef.current.get(remoteUid) !== true) {
+          console.info("[WebRTC][ScreenShare] ignoring inactive video track", remoteUid);
+        } else {
+          updateRemoteScreenStream(remoteUid, stream);
+        }
+      } else updateRemoteStream(remoteUid, stream);
       event.track.onended = () => {
         stream.removeTrack(event.track);
         if (isScreenTrack && !stream.getVideoTracks().length) updateRemoteScreenStream(remoteUid, null);
@@ -347,8 +353,15 @@ export function CallProvider({ children }) {
 
   useEffect(() => {
     if (!localStream || !firebaseUser) return undefined;
+    participantSharingRef.current = new Map(participants.map((participant) => [participant.uid, participant.screenSharing === true]));
     const remotes = participants.filter((participant) => participant.uid !== firebaseUser.uid);
     remotes.forEach((participant) => {
+      const peer = peers.current.get(participant.uid);
+      if (peer?.media?.remoteScreenStream && participant.screenSharing !== true) {
+        updateRemoteScreenStream(participant.uid, null);
+      } else if (peer?.media?.remoteScreenStream && peer.media.remoteScreenStream.getVideoTracks().length > 0) {
+        updateRemoteScreenStream(participant.uid, peer.media.remoteScreenStream);
+      }
       if (firebaseUser.uid < participant.uid) createPeer(participant.uid, true).catch((error) => setMediaError(`Falha ao conectar participante: ${error.message}`));
     });
     peers.current.forEach((_, uid) => {
