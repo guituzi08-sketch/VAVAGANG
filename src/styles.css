@@ -244,3 +244,58 @@ h1 em, .home-intro h1 em { color: var(--blue-bright); text-shadow: 0 0 26px #e32
 	.community-rail { background: #0b090aeF; border-top-color: #4a252c; }
 	.voice-mini-player { border-color: #e3263f99; background: #170e10f5; }
 }
+
+/* Game menu presentation */
+.home-content { position: relative; isolation: isolate; overflow: hidden; }
+.home-content::after { position: absolute; z-index: -1; top: 0; right: 3%; width: 42%; height: 52%; content: ""; opacity: .24; pointer-events: none; background: linear-gradient(135deg, transparent 48%, #e3263f 49% 50%, transparent 51%), linear-gradient(45deg, transparent 48%, #e3263f 49% 50%, transparent 51%); background-size: 92px 92px; mask-image: radial-gradient(ellipse at center, #000, transparent 72%); transform: perspective(700px) rotateX(58deg) rotateZ(-12deg); transform-origin: center top; }
+.home-intro { position: relative; min-height: 270px; align-items: center; margin-bottom: 42px; padding: 46px 42px; border: 1px solid #54252d; background: linear-gradient(110deg, #150c0e 0%, #0c0b0c 55%, #210d12 100%); box-shadow: 0 24px 65px #000b, inset 0 0 70px #e3263f0b; overflow: hidden; }
+.home-intro::before { position: absolute; inset: 12px; border: 1px solid #e3263f24; content: ""; pointer-events: none; clip-path: polygon(0 0, 25% 0, 25% 1px, 75% 1px, 75% 0, 100% 0, 100% 22%, calc(100% - 1px) 22%, calc(100% - 1px) 78%, 100% 78%, 100% 100%, 75% 100%, 75% calc(100% - 1px), 25% calc(100% - 1px), 25% 100%, 0 100%, 0 78%, 1px 78%, 1px 22%, 0 22%); }
+.home-intro > div:first-child { position: relative; z-index: 2; max-width: 53%; }
+.home-intro h1 { font-size: clamp(48px, 6vw, 82px); letter-spacing: .01em; line-height: .9; text-shadow: 4px 5px 0 #390b13, 0 0 34px #e3263f33; }
+.home-intro h1 em { display: inline-block; color: #ff5266; transform: skew(-9deg); }
+.home-intro .muted { max-width: 380px; margin-top: 16px; color: #c2afb1; }
+.profile-chip { position: absolute; z-index: 3; right: 42px; bottom: 35px; border-left-color: #71313b; }
+.home-arena { position: absolute; top: 50%; right: 10%; width: min(34vw, 320px); aspect-ratio: 1; transform: translateY(-50%) perspective(900px) rotateX(58deg) rotateZ(-18deg); transform-style: preserve-3d; pointer-events: none; }
+.arena-grid { position: absolute; inset: -18%; opacity: .5; background-image: linear-gradient(#e3263f44 1px, transparent 1px), linear-gradient(90deg, #e3263f44 1px, transparent 1px); background-size: 28px 28px; transform: translateZ(-35px); mask-image: radial-gradient(circle, #000 18%, transparent 68%); animation: arena-drift 7s ease-in-out infinite alternate; }
+.arena-ring { position: absolute; inset: 16%; border: 2px solid #e3263f99; border-radius: 50%; box-shadow: 0 0 24px #e3263f55, inset 0 0 20px #e3263f22; }
+.arena-ring::before, .arena-ring::after { position: absolute; inset: 12%; border: 1px solid #ff7583aa; border-radius: inherit; content: ""; }
+.arena-ring::after { inset: 28%; border-color: #e3263f77; }
+.arena-ring-back { transform: translateZ(-18px) scale(.86); opacity: .48; }
+.arena-ring-front { transform: translateZ(34px) scale(1.08); animation: arena-spin 12s linear infinite; }
+.arena-core { position: absolute; inset: 31%; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #ff5267, #8e0d24); border: 2px solid #ff9aa4; box-shadow: 0 0 32px #e3263f99, 0 14px 0 #4f0915, inset 0 0 18px #fff5; transform: translateZ(45px); }
+.arena-core::after { position: absolute; inset: 9px; border: 1px solid #ffffff88; content: ""; }
+.arena-core span { font-size: clamp(42px, 6vw, 70px); font-weight: 900; text-shadow: 3px 4px 0 #6d0b1b; transform: translateZ(18px); }
+.arena-label { position: absolute; z-index: 4; color: #ff8b96; font: 9px 'DM Mono', monospace; letter-spacing: .18em; white-space: nowrap; transform: translateZ(70px) rotateZ(18deg); }
+.arena-label-top { top: 3%; right: -9%; }
+.arena-label-side { bottom: 4%; left: -12%; color: #bc6872; }
+@keyframes arena-spin { to { transform: translateZ(34px) scale(1.08) rotate(360deg); } }
+@keyframes arena-drift { to { transform: translate3d(10px, -10px, -35px); opacity: .72; } }
+.hub-overview { position: relative; border-color: #4a242b; background: linear-gradient(135deg, #191011, #0c0c0c); }
+.hub-overview::before { position: absolute; top: 0; right: 22px; left: 22px; height: 2px; content: ""; background: linear-gradient(90deg, transparent, #e3263f, transparent); box-shadow: 0 0 18px #e3263f; }
+.hub-heading { color: #ff6877; }
+.hub-panel { position: relative; overflow: hidden; }
+.hub-panel::after { position: absolute; right: -32px; bottom: -42px; width: 100px; height: 100px; border: 1px solid #e3263f33; border-radius: 50%; content: ""; }
+.dashboard-grid { perspective: 1200px; }
+.create-panel, .rooms-panel { transform-style: preserve-3d; }
+.create-panel { position: relative; padding: 38px 42px 38px 0; }
+.create-panel::before { position: absolute; top: 18px; bottom: 18px; left: -18px; width: 3px; content: ""; background: #e3263f; box-shadow: 0 0 22px #e3263f; }
+.rooms-panel { padding: 38px 0 38px 42px; }
+.room-row { border-color: #40232a; background: linear-gradient(100deg, #151011, #0e0d0d); transform-origin: left center; }
+.room-row:hover { border-color: #f04459; background: linear-gradient(100deg, #321219, #160d0f); transform: translate3d(8px, -3px, 18px) rotateY(-2deg); box-shadow: -8px 12px 0 #4e0b17, 0 12px 28px #0008; }
+.room-icon { color: #ff6675; background: #e3263f1c; box-shadow: inset 0 0 14px #e3263f24; }
+.join-button { min-height: 34px; padding: 0 12px; border: 1px solid #e3263f66; }
+.empty-state { border-color: #40232a; }
+
+@media (max-width: 800px) {
+	.home-intro { min-height: 400px; padding: 32px 24px; align-items: start; }
+	.home-intro > div:first-child { max-width: 100%; }
+	.home-intro h1 { font-size: clamp(40px, 12vw, 64px); }
+	.home-arena { top: auto; right: 8%; bottom: -18px; width: 220px; transform: perspective(700px) rotateX(58deg) rotateZ(-18deg); }
+	.profile-chip { right: 24px; bottom: 24px; transform: scale(.88); transform-origin: right bottom; }
+	.create-panel { padding-right: 0; }
+	.rooms-panel { padding-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
