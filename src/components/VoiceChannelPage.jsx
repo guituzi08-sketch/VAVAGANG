@@ -32,7 +32,9 @@ function VoiceChannelContent({ roomId }) {
   const [messageText, setMessageText] = useState("");
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [messageError, setMessageError] = useState("");
-  const [volumes, setVolumes] = useState({});
+  const [volumes, setVolumes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`) ?? "{}"); } catch { return {}; }
+  });
   const [volumeTarget, setVolumeTarget] = useState(null);
   const [soundName, setSoundName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -54,6 +56,9 @@ function VoiceChannelContent({ roomId }) {
     navigate("/", { replace: true });
   }, [roomClosed, roomClosedMessage, navigate]);
   useEffect(() => { setAudioEnabled(localStream?.getAudioTracks()[0]?.enabled ?? true); }, [localStream]);
+  useEffect(() => {
+    try { localStorage.setItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`, JSON.stringify(volumes)); } catch {}
+  }, [firebaseUser, volumes]);
 
   async function submitMessage(event) {
     event.preventDefault();
@@ -92,11 +97,10 @@ function VoiceChannelContent({ roomId }) {
         {participants.length === 0 && <p className="voice-empty">{isConnecting ? "Entrando na sala..." : "Ninguém está conectado ainda."}</p>}
         <div className="voice-participant-list">{participants.map((participant) => {
           const participantVolume = volumes[participant.uid] ?? 1;
-          const hasRemoteAudio = Boolean(remoteStreams[participant.uid]);
           const isSharing = Boolean(remoteScreenStreams?.[participant.uid]?.getVideoTracks().length) || participant.screenSharing;
           const cameraIsActive = participant.uid === firebaseUser?.uid ? Boolean(cameraStream) : participant.cameraEnabled === true;
           const participantCamera = participant.uid === firebaseUser?.uid ? cameraStream : remoteCameraStreams?.[participant.uid];
-          return <div className="voice-participant" key={participant.uid}><ParticipantCamera stream={cameraIsActive ? participantCamera : null} label={participant.displayName} /><span className="presence-dot" /><div><strong>{participant.displayName}</strong><small>{participant.uid === firebaseUser?.uid ? "Você" : "na sala"}</small></div><span className="participant-audio">{participant.muted ? <MicOff size={15} /> : <Mic size={15} />}</span>{isSharing && <span className="screen-share-label">📺 {participant.screenAudio ? "🔊" : ""}</span>}{participant.uid !== firebaseUser?.uid && <button className="icon-button participant-message" onClick={() => openPrivateChat({ uid: participant.uid, displayName: participant.displayName })} title="Mensagem privada"><MessageCircle size={15} /></button>}{hasRemoteAudio && <div className="participant-volume"><button className="icon-button" onClick={() => setVolumeTarget(volumeTarget === participant.uid ? null : participant.uid)} title="Volume individual">{participantVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}</button>{volumeTarget === participant.uid && <input type="range" min="0" max="1" step="0.05" value={participantVolume} onChange={(event) => setVolumes((current) => ({ ...current, [participant.uid]: Number(event.target.value) }))} aria-label={`Volume de ${participant.displayName}`} />}</div>}</div>;
+          return <div className="voice-participant" key={participant.uid}><ParticipantCamera stream={cameraIsActive ? participantCamera : null} label={participant.displayName} /><span className="presence-dot" /><div><strong>{participant.displayName}</strong><small>{participant.uid === firebaseUser?.uid ? "Você" : "na sala"}</small></div><span className="participant-audio">{participant.muted ? <MicOff size={15} /> : <Mic size={15} />}</span>{isSharing && <span className="screen-share-label">📺 {participant.screenAudio ? "🔊" : ""}</span>}{participant.uid !== firebaseUser?.uid && <button className="icon-button participant-message" onClick={() => openPrivateChat({ uid: participant.uid, displayName: participant.displayName })} title="Mensagem privada"><MessageCircle size={15} /></button>}{participant.uid !== firebaseUser?.uid && <div className="participant-volume"><button className="icon-button" onClick={() => setVolumes((current) => ({ ...current, [participant.uid]: participantVolume === 0 ? 1 : 0 }))} title={participantVolume === 0 ? `Ativar ${participant.displayName}` : `Silenciar ${participant.displayName}`}>{participantVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}</button><button className="icon-button" onClick={() => setVolumeTarget(volumeTarget === participant.uid ? null : participant.uid)} title="Volume individual">{Math.round(participantVolume * 100)}%</button>{volumeTarget === participant.uid && <input type="range" min="0" max="1" step="0.05" value={participantVolume} onChange={(event) => setVolumes((current) => ({ ...current, [participant.uid]: Number(event.target.value) }))} aria-label={`Volume de ${participant.displayName}`} />}</div>}</div>;
         })}</div>
         {Object.entries(remoteStreams).map(([uid, stream]) => <RemoteAudio key={uid} stream={stream} volume={volumes[uid] ?? 1} onBlocked={() => setAudioBlocked(true)} />)}
         {audioBlocked && <button className="secondary-button" onClick={() => { document.querySelectorAll("audio").forEach((audio) => audio.play().catch((error) => console.error("[VOICE DEBUG] audio.play failed", error))); setAudioBlocked(false); }}>Ativar áudio</button>}
@@ -115,12 +119,14 @@ function RemoteAudio({ stream, volume, onBlocked }) {
     const audio = audioRef.current;
     if (!audio) return undefined;
     audio.srcObject = stream;
-    audio.volume = volume;
     audio.muted = false;
     console.info("[VOICE DEBUG] audio element", { volume: audio.volume, muted: audio.muted, tracks: stream.getAudioTracks().length });
     audio.play().catch((error) => { if (error.name !== "AbortError") { console.error("[VOICE DEBUG] audio.play failed", error); onBlocked(); } });
     return () => { audio.srcObject = null; };
-  }, [stream, volume]);
+  }, [stream, onBlocked]);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume]);
   return <audio ref={audioRef} autoPlay playsInline />;
 }
 
