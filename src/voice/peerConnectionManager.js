@@ -7,6 +7,10 @@ function peerKey(firstUid, secondUid) {
   return [firstUid, secondUid].sort().join("::");
 }
 
+function isMLineOrderError(error) {
+  return /m-lines|m line|order of m-lines/i.test(error?.message ?? "");
+}
+
 export class PeerConnectionManager {
   constructor({ db, roomId, localUid, callSessionId, localStream, rtcConfig, onRemoteStream, onPeerState, onError }) {
     this.db = db;
@@ -109,8 +113,16 @@ export class PeerConnectionManager {
         console.warn("[WebRTC] signal ignored: wrong peerKey", { localUser: this.localUid, remoteUser: signal.from, expectedPeerKey: state.peerKey, receivedPeerKey: signal.peerKey });
         return;
       }
-      if (signal.type === "offer") await this.handleOffer(state, signal);
-      if (signal.type === "answer") await this.handleAnswer(state, signal);
+      try {
+        if (signal.type === "offer") await this.handleOffer(state, signal);
+        if (signal.type === "answer") await this.handleAnswer(state, signal);
+      } catch (error) {
+        if (!isMLineOrderError(error) || signal.type !== "offer") throw error;
+        console.warn("[WebRTC] m-line order mismatch; recreating peer", { localUser: this.localUid, remoteUser: signal.from, peerKey: state.peerKey, callSessionId: this.callSessionId, signalingState: state.pc.signalingState, connectionState: state.pc.connectionState, iceConnectionState: state.pc.iceConnectionState });
+        this.removePeer(signal.from);
+        const replacement = await this.ensurePeer(signal.from);
+        await this.handleOffer(replacement, signal);
+      }
     }).catch((error) => this.reportPeerError(error, state.remoteUid));
     return state.signaling;
   }
