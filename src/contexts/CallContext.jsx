@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { joinRoom, leaveRoom, subscribeToParticipants, subscribeToRoom, updateParticipantState } from "../services/roomService";
+import { getRoom, joinRoom, leaveRoom, subscribeToParticipants, subscribeToRoom, updateParticipantState } from "../services/roomService";
 import { useAuth } from "./AuthContext";
 
 const CallContext = createContext(null);
@@ -276,13 +276,20 @@ export function CallProvider({ children }) {
     if (!roomId || (roomIdRef.current === roomId && localStreamRef.current)) return;
     if (roomIdRef.current && roomIdRef.current !== roomId) await exitCall();
     const callToken = ++callTokenRef.current;
-    roomIdRef.current = roomId;
-    setActiveRoomId(roomId);
-    setRoomClosed(false);
-    setRoomClosedMessage("");
-    setMediaError("");
-    setIsConnecting(true);
     try {
+      const room = await getRoom(roomId);
+      if (!room) {
+        const roomError = new Error("Esta sala não existe mais.");
+        roomError.code = "room-not-found";
+        throw roomError;
+      }
+      if (callToken !== callTokenRef.current) return;
+      roomIdRef.current = room.id;
+      setActiveRoomId(room.id);
+      setRoomClosed(false);
+      setRoomClosedMessage("");
+      setMediaError("");
+      setIsConnecting(true);
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("Seu navegador não oferece acesso ao microfone.");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const audioTracks = stream.getAudioTracks();
@@ -297,9 +304,9 @@ export function CallProvider({ children }) {
       }
       localStreamRef.current = stream;
       setLocalStream(stream);
-      await joinRoom(roomId, firebaseUser, profile);
+      await joinRoom(room.id, firebaseUser, profile);
       if (callToken !== callTokenRef.current) {
-        await leaveRoom(roomId, firebaseUser.uid);
+        await leaveRoom(room.id, firebaseUser.uid);
         stream.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
         setLocalStream(null);
@@ -313,6 +320,10 @@ export function CallProvider({ children }) {
       roomIdRef.current = null;
       setActiveRoomId(null);
       setIsConnecting(false);
+      if (error.code === "room-not-found") {
+        setRoomClosed(true);
+        setRoomClosedMessage(error.message);
+      }
       setMediaError(
         error.name === "NotAllowedError"
           ? "Permita microfone e câmera para entrar na sala."

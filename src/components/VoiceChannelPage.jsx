@@ -39,8 +39,14 @@ function VoiceChannelContent({ roomId }) {
   const [roomName, setRoomName] = useState("");
 
   useEffect(() => { enterCall(roomId); }, [roomId]);
-  useEffect(() => subscribeToRoom(roomId, (room) => setRoomName(room?.name ?? ""), () => setRoomName("")), [roomId]);
-  useEffect(() => subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(error.message)), [roomId]);
+  useEffect(() => {
+    if (!roomId) return undefined;
+    return subscribeToRoom(roomId, (room) => setRoomName(room?.name ?? ""), () => setRoomName(""));
+  }, [roomId]);
+  useEffect(() => {
+    if (!roomId) return undefined;
+    return subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(error.message));
+  }, [roomId]);
   useEffect(() => {
     if (!roomClosed) return;
     window.alert(roomClosedMessage || "Esta sala foi encerrada pelo proprietário.");

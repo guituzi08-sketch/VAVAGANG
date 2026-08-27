@@ -43,6 +43,13 @@ export function subscribeToRoom(roomId, onChange, onError) {
   }, onError);
 }
 
+export async function getRoom(roomId) {
+  if (!roomId) return null;
+  const snapshot = await getDoc(doc(db, "rooms", roomId));
+  if (!snapshot.exists() || snapshot.data().status === "closed") return null;
+  return { id: snapshot.id, ...snapshot.data() };
+}
+
 export async function updateRoom(roomId, updates) {
   const cleanUpdates = {
     name: updates.name.trim(),
