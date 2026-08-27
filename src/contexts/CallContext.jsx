@@ -32,7 +32,10 @@ export function CallProvider({ children }) {
   const cleanupRef = useRef(null);
   const operationRef = useRef(Promise.resolve());
 
-  function reportError(error) { setMediaError(error?.message || "Não foi possível conectar à sala de voz."); setCallState(CALL_STATES.FAILED); }
+  function reportError(error, remoteUid) {
+    setMediaError(error?.message || "Não foi possível conectar à sala de voz.");
+    if (!remoteUid) setCallState(CALL_STATES.FAILED);
+  }
   function setRemoteStream(uid, streams) {
     if (!streams) {
       setRemoteStreams((current) => { const next = { ...current }; delete next[uid]; return next; });
@@ -70,7 +73,7 @@ export function CallProvider({ children }) {
       const manager = new PeerConnectionManager({ db, roomId: room.id, localUid: firebaseUser.uid, callSessionId, localStream: stream, rtcConfig, onRemoteStream: setRemoteStream, onPeerState: (_, state) => { if (state === "connected") setCallState(CALL_STATES.CONNECTED); if (["failed", "disconnected"].includes(state)) setCallState(CALL_STATES.RECONNECTING); }, onError: reportError });
       managerRef.current = manager;
       const unsubscribeParticipants = subscribeToParticipants(room.id, (next) => { setParticipants(next); manager.syncParticipants(next); }, reportError);
-      const unsubscribeSignals = subscribeToSignaling(db, room.id, firebaseUser.uid, { onSignal: (signal) => manager.handleSignal(signal).catch(reportError), onCandidate: (candidate) => manager.handleCandidate(candidate).catch(reportError), onError: reportError });
+      const unsubscribeSignals = subscribeToSignaling(db, room.id, firebaseUser.uid, { onSignal: (signal) => manager.handleSignal(signal).catch((error) => reportError(error, signal.from)), onCandidate: (candidate) => manager.handleCandidate(candidate).catch((error) => reportError(error, candidate.from)), onError: reportError });
       const unsubscribeRoom = subscribeToRoom(room.id, (currentRoom) => { if (!currentRoom || currentRoom.status === "closed") { setRoomClosed(true); setRoomClosedMessage(currentRoom ? "Esta sala foi encerrada pelo proprietário." : "Esta sala não existe mais."); leaveCurrentRoom(); } }, reportError);
       cleanupRef.current = () => { unsubscribeParticipants(); unsubscribeSignals(); unsubscribeRoom(); }; setCallState(CALL_STATES.CONNECTED);
     }).catch(async (error) => { if (sessionRef.current) await leaveCurrentRoom(); else clearSession(); reportError(error); });
