@@ -39,8 +39,10 @@ async function debugVoiceConnection(peer, remoteUid) {
 export function CallProvider({ children }) {
   const { firebaseUser, profile } = useAuth();
   const [localStream, setLocalStream] = useState(null);
+  const [cameraStream, setCameraStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
   const [remoteStreams, setRemoteStreams] = useState({});
+  const [remoteCameraStreams, setRemoteCameraStreams] = useState({});
   const [remoteScreenStreams, setRemoteScreenStreams] = useState({});
   const [participants, setParticipants] = useState([]);
   const [mediaError, setMediaError] = useState("");
@@ -51,6 +53,7 @@ export function CallProvider({ children }) {
   const peers = useRef(new Map());
   const roomIdRef = useRef(null);
   const localStreamRef = useRef(null);
+  const cameraStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const pendingCandidates = useRef(new Map());
   const processedSignals = useRef(new Set());
@@ -58,6 +61,7 @@ export function CallProvider({ children }) {
   const participantSharingRef = useRef(new Map());
 
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
+  useEffect(() => { cameraStreamRef.current = cameraStream; }, [cameraStream]);
   useEffect(() => { screenStreamRef.current = screenStream; }, [screenStream]);
 
   function updateRemoteStream(uid, stream) {
@@ -73,6 +77,15 @@ export function CallProvider({ children }) {
     });
   }
 
+  function updateRemoteCameraStream(uid, stream) {
+    setRemoteCameraStreams((current) => {
+      if (stream) return { ...current, [uid]: stream };
+      const next = { ...current };
+      delete next[uid];
+      return next;
+    });
+  }
+
   function removePeer(uid) {
     peers.current.get(uid)?.close();
     peers.current.delete(uid);
@@ -81,6 +94,7 @@ export function CallProvider({ children }) {
       delete next[uid];
       return next;
     });
+    updateRemoteCameraStream(uid, null);
     setRemoteScreenStreams((current) => {
       const next = { ...current };
       delete next[uid];
@@ -111,15 +125,18 @@ export function CallProvider({ children }) {
     const peer = new RTCPeerConnection(rtcConfig);
     peers.current.set(remoteUid, peer);
     const remoteAudioStream = new MediaStream();
+    const remoteCameraStream = new MediaStream();
     const remoteScreenStream = new MediaStream();
     const audioTrack = localStreamRef.current?.getAudioTracks()[0];
     const audioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
     const screenAudioTransceiver = peer.addTransceiver("audio", { direction: "sendrecv" });
+    const cameraVideoTransceiver = peer.addTransceiver("video", { direction: "sendrecv" });
     const videoTransceiver = peer.addTransceiver("video", { direction: "sendrecv" });
     const audioSender = audioTransceiver.sender;
+    const cameraVideoSender = cameraVideoTransceiver.sender;
     const readyPromise = audioSender.replaceTrack(audioTrack ?? null);
     peer.readyPromise = readyPromise;
-    peer.media = { audioSender, screenAudioSender: screenAudioTransceiver.sender, videoSender: videoTransceiver.sender, remoteAudioStream, remoteScreenStream };
+    peer.media = { audioSender, cameraVideoSender, screenAudioSender: screenAudioTransceiver.sender, screenVideoSender: videoTransceiver.sender, remoteAudioStream, remoteCameraStream, remoteScreenStream };
     console.info("[VOICE DEBUG] local stream", Boolean(localStreamRef.current));
     console.info("[VOICE DEBUG] audio tracks", localStreamRef.current?.getAudioTracks().length ?? 0);
     console.info("[VOICE DEBUG] audio track", { enabled: audioTrack?.enabled ?? false, readyState: audioTrack?.readyState ?? "missing" });
@@ -127,13 +144,17 @@ export function CallProvider({ children }) {
     if (screenStreamRef.current) {
       peer.readyPromise = Promise.all([
         readyPromise,
+        cameraVideoSender.replaceTrack(cameraStreamRef.current?.getVideoTracks()[0] ?? null),
         videoTransceiver.sender.replaceTrack(screenStreamRef.current.getVideoTracks()[0] ?? null),
         screenAudioTransceiver.sender.replaceTrack(screenStreamRef.current.getAudioTracks()[0] ?? null),
       ]);
+    } else if (cameraStreamRef.current) {
+      peer.readyPromise = Promise.all([readyPromise, cameraVideoSender.replaceTrack(cameraStreamRef.current.getVideoTracks()[0] ?? null)]);
     }
     peer.ontrack = (event) => {
-      const isScreenTrack = event.track.kind === "video" || event.transceiver === screenAudioTransceiver;
-      const stream = isScreenTrack ? remoteScreenStream : remoteAudioStream;
+      const isScreenTrack = event.transceiver === screenAudioTransceiver || event.transceiver === videoTransceiver;
+      const isCameraTrack = event.transceiver === cameraVideoTransceiver;
+      const stream = isScreenTrack ? remoteScreenStream : isCameraTrack ? remoteCameraStream : remoteAudioStream;
       console.info("[VOICE DEBUG] REMOTE TRACK RECEIVED", { remoteUid, kind: event.track.kind, streamCount: event.streams.length });
       if (!stream.getTracks().some((track) => track.id === event.track.id)) stream.addTrack(event.track);
       if (isScreenTrack) console.info("[WebRTC][ScreenShare] track received", remoteUid, event.track.kind);
@@ -143,10 +164,12 @@ export function CallProvider({ children }) {
         } else {
           updateRemoteScreenStream(remoteUid, stream);
         }
-      } else updateRemoteStream(remoteUid, stream);
+      } else if (isCameraTrack) updateRemoteCameraStream(remoteUid, stream);
+      else updateRemoteStream(remoteUid, stream);
       event.track.onended = () => {
         stream.removeTrack(event.track);
         if (isScreenTrack && !stream.getVideoTracks().length) updateRemoteScreenStream(remoteUid, null);
+        if (isCameraTrack && !stream.getVideoTracks().length) updateRemoteCameraStream(remoteUid, null);
         console.info("[WebRTC][ScreenShare] track ended", remoteUid);
       };
       debugVoiceConnection(peer, remoteUid).catch((error) => console.error("[VOICE DEBUG] stats failed", error));
@@ -349,14 +372,18 @@ export function CallProvider({ children }) {
       pendingCandidates.current.clear();
       processedSignals.current.clear();
       setLocalStream(null);
+      setCameraStream(null);
       setScreenStream(null);
       setRemoteStreams({});
+      setRemoteCameraStreams({});
       setRemoteScreenStreams({});
       localStreamRef.current = null;
       screenStreamRef.current = null;
       roomIdRef.current = null;
       setActiveRoomId(null);
       setIsConnecting(false);
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
     }
   }
 
@@ -389,9 +416,40 @@ export function CallProvider({ children }) {
   }
 
   function toggleVideo() {
-    const track = localStream?.getVideoTracks()[0];
-    if (track) track.enabled = !track.enabled;
-    return track?.enabled ?? false;
+    if (cameraStreamRef.current) {
+      stopCamera();
+      return false;
+    }
+    startCamera();
+    return true;
+  }
+
+  async function startCamera() {
+    if (cameraStreamRef.current || !navigator.mediaDevices?.getUserMedia) return false;
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const track = stream.getVideoTracks()[0];
+      if (!track) throw new Error("A câmera não forneceu uma faixa de vídeo.");
+      await Promise.all([...peers.current.values()].map((peer) => peer.media?.cameraVideoSender.replaceTrack(track)));
+      cameraStreamRef.current = stream;
+      setCameraStream(stream);
+      track.onended = stopCamera;
+      if (firebaseUser && roomIdRef.current) updateParticipantState(roomIdRef.current, firebaseUser.uid, { cameraEnabled: true }).catch((error) => setMediaError(error.message));
+      return true;
+    } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
+      setMediaError(error.name === "NotAllowedError" ? "Permita o acesso à câmera para ativar sua webcam." : error.message);
+      return false;
+    }
+  }
+
+  function stopCamera() {
+    peers.current.forEach((peer) => peer.media?.cameraVideoSender.replaceTrack(null).catch((error) => console.error("[WebRTC][Camera] stop video error", error)));
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    setCameraStream(null);
+    if (firebaseUser && roomIdRef.current) updateParticipantState(roomIdRef.current, firebaseUser.uid, { cameraEnabled: false }).catch((error) => setMediaError(error.message));
   }
 
   async function shareScreen() {
@@ -411,7 +469,7 @@ export function CallProvider({ children }) {
       if (!screenAudioTrack) setMediaError("Seu navegador não disponibilizou o áudio desta tela.");
       console.info("[WebRTC][ScreenShare] starting", { hasAudio: Boolean(screenAudioTrack) });
       await Promise.all([...peers.current.values()].map(async (peer) => {
-        await peer.media?.videoSender.replaceTrack(screenTrack);
+        await peer.media?.screenVideoSender.replaceTrack(screenTrack);
         await peer.media?.screenAudioSender.replaceTrack(screenAudioTrack);
         console.info("[WebRTC][ScreenShare] tracks replaced");
       }));
@@ -428,7 +486,7 @@ export function CallProvider({ children }) {
   function stopScreenShare() {
     console.info("[WebRTC][ScreenShare] stopping");
     peers.current.forEach((peer) => {
-      peer.media?.videoSender.replaceTrack(null).catch((error) => console.error("[WebRTC][ScreenShare] stop video error", error));
+      peer.media?.screenVideoSender.replaceTrack(null).catch((error) => console.error("[WebRTC][ScreenShare] stop video error", error));
       peer.media?.screenAudioSender.replaceTrack(null).catch((error) => console.error("[WebRTC][ScreenShare] stop audio error", error));
     });
     screenStream?.getTracks().forEach((track) => track.stop());
@@ -437,7 +495,7 @@ export function CallProvider({ children }) {
   }
 
   return (
-    <CallContext.Provider value={{ localStream, screenStream, remoteStreams, remoteScreenStreams, participants, mediaError, roomClosed, roomClosedMessage, activeRoomId, isConnecting, enterCall, exitCall, toggleAudio, toggleVideo, shareScreen, stopScreenShare }}>
+    <CallContext.Provider value={{ localStream, cameraStream, screenStream, remoteStreams, remoteCameraStreams, remoteScreenStreams, participants, mediaError, roomClosed, roomClosedMessage, activeRoomId, isConnecting, enterCall, exitCall, toggleAudio, toggleVideo, startCamera, stopCamera, shareScreen, stopScreenShare }}>
       {children}
     </CallContext.Provider>
   );

@@ -122,12 +122,13 @@ export async function joinRoom(roomId, user, profile = {}) {
       status: "online",
       muted: false,
       speaking: false,
+      cameraEnabled: false,
       screenSharing: false,
       screenAudio: false,
       joinedAt: serverTimestamp(),
     };
     if (participantSnapshot.exists()) {
-      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online", screenSharing: false, screenAudio: false });
+      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online", cameraEnabled: false, screenSharing: false, screenAudio: false });
       return;
     }
     transaction.set(participantRef, participantData);
