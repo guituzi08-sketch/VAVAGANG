@@ -102,9 +102,9 @@ service cloud.firestore {
               || request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds);
           allow create: if signedIn()
             && request.resource.data.authorId == request.auth.uid
-            && (get(/databases/$(database)/documents/groups/$(groupId)).data.privacy != 'private'
-              || request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds);
+            && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
           allow update, delete: if signedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds
             && (resource.data.authorId == request.auth.uid
               || get(/databases/$(database)/documents/groups/$(groupId)).data.ownerId == request.auth.uid
               || get(/databases/$(database)/documents/groups/$(groupId)).data.roles[request.auth.uid] in ['ADMIN', 'MODERATOR']);

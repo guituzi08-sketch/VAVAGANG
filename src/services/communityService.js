@@ -92,6 +92,12 @@ export async function deleteChannel(groupId, channelId) {
 export async function sendChannelMessage(groupId, channelId, user, text) {
   const cleanText = text.trim();
   if (!cleanText) return;
+  const groupSnapshot = await getDoc(doc(db, "groups", groupId));
+  const channelSnapshot = await getDoc(doc(db, "groups", groupId, "channels", channelId));
+  const group = groupSnapshot.data() ?? {};
+  const channel = channelSnapshot.data() ?? {};
+  if (!groupSnapshot.exists() || !channelSnapshot.exists()) throw new Error("Este grupo ou canal não está disponível.");
+  if (!group.memberIds?.includes(user.uid)) throw new Error("Você não faz mais parte deste grupo.");
   await addDoc(collection(db, "groups", groupId, "channels", channelId, "messages"), {
     authorId: user.uid,
     authorName: user.nickname || user.displayName || "Usuário",
@@ -99,9 +105,6 @@ export async function sendChannelMessage(groupId, channelId, user, text) {
     createdAt: serverTimestamp(),
     edited: false,
   });
-  const groupSnapshot = await getDoc(doc(db, "groups", groupId));
-  const channelSnapshot = await getDoc(doc(db, "groups", groupId, "channels", channelId));
-  const group = groupSnapshot.data() ?? {}; const channel = channelSnapshot.data() ?? {};
   await Promise.all((group.memberIds ?? []).filter((uid) => uid !== user.uid).map((uid) => createNotification({ recipientId: uid, senderId: user.uid, type: "channel_message", title: `Nova mensagem em #${channel.name ?? "canal"}`, message: `${user.nickname || user.displayName || "Usuário"} enviou uma mensagem.`, metadata: { groupId, channelId } })));
   const mentions = [...cleanText.matchAll(/@([a-zA-Z0-9_.]{3,24})/g)].map((match) => normalizeUserSearch(match[1]));
   const mentionedUsers = await Promise.all([...new Set(mentions)].map((nicknameNormalized) => getDocs(query(collection(db, "users"), where("nicknameNormalized", "==", nicknameNormalized), limit(5)))));
