@@ -26,6 +26,8 @@ const rtcConfig = {
   iceCandidatePoolSize: 10,
 };
 
+console.info("[VOICE DEBUG] REMOTE AUDIO DIAGNOSTIC ACTIVE");
+
 async function debugVoiceConnection(peer, remoteUid) {
   const senders = peer.getSenders();
   const receivers = peer.getReceivers();
@@ -44,6 +46,42 @@ async function debugVoiceConnection(peer, remoteUid) {
     signalingState: peer.signalingState,
     outboundAudioBytes: outboundAudio.reduce((total, bytes) => total + bytes, 0),
     inboundAudioBytes: inboundAudio.reduce((total, bytes) => total + bytes, 0),
+  });
+}
+
+function getAudioDescriptionInfo(description) {
+  const audioSection = description?.sdp?.split(/\r?\n(?=m=)/).find((section) => section.startsWith("m=audio"));
+  if (!audioSection) return { present: false, direction: null };
+  const direction = ["sendrecv", "recvonly", "sendonly", "inactive"].find((value) => new RegExp(`(?:^|\\r?\\n)a=${value}(?:\\r?\\n|$)`).test(audioSection)) ?? "sendrecv";
+  return { present: true, direction };
+}
+
+function debugPeerTransport(peer, remoteUid, peers) {
+  const senders = peer.getSenders();
+  const receivers = peer.getReceivers();
+  const transceivers = peer.getTransceivers();
+  const audioReceivers = receivers.filter((receiver) => receiver.track?.kind === "audio");
+  console.info("[VOICE DEBUG] REMOTE PEER IDENTIFIED", { remoteUserId: remoteUid, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, signalingState: peer.signalingState });
+  console.info("[VOICE DEBUG] SENDERS", { userId: remoteUid, count: senders.length, items: senders.map((sender) => ({ kind: sender.track?.kind ?? null, trackId: sender.track?.id ?? null, readyState: sender.track?.readyState ?? null })) });
+  console.info("[VOICE DEBUG] RECEIVERS", { userId: remoteUid, count: receivers.length, items: receivers.map((receiver) => ({ kind: receiver.track?.kind ?? null, trackId: receiver.track?.id ?? null, enabled: receiver.track?.enabled ?? null, muted: receiver.track?.muted ?? null, readyState: receiver.track?.readyState ?? null })) });
+  if (!audioReceivers.length) console.warn("[VOICE DEBUG] NO REMOTE AUDIO RECEIVER", { userId: remoteUid });
+  console.info("[VOICE DEBUG] TRANSCEIVERS", { userId: remoteUid, items: transceivers.map((transceiver) => ({ kind: transceiver.receiver.track?.kind ?? transceiver.sender.track?.kind ?? null, direction: transceiver.direction, currentDirection: transceiver.currentDirection, senderTrackKind: transceiver.sender.track?.kind ?? null, receiverTrackKind: transceiver.receiver.track?.kind ?? null })) });
+  console.info("[VOICE DEBUG] LOCAL DESCRIPTION AUDIO", getAudioDescriptionInfo(peer.localDescription));
+  console.info("[VOICE DEBUG] REMOTE DESCRIPTION AUDIO", getAudioDescriptionInfo(peer.remoteDescription));
+  console.info("[VOICE DEBUG] ACTIVE PEER CONNECTIONS", {
+    total: peers.size,
+    items: [...peers.entries()].map(([userId, activePeer]) => ({ userId, connectionState: activePeer.connectionState, iceConnectionState: activePeer.iceConnectionState, senders: activePeer.getSenders().length, receivers: activePeer.getReceivers().length })),
+  });
+}
+
+function logVoiceTrack(label, track, userId) {
+  console.info(`[VOICE DEBUG] ${label}`, {
+    userId,
+    kind: track?.kind ?? null,
+    trackId: track?.id ?? null,
+    enabled: track?.enabled ?? null,
+    muted: track?.muted ?? null,
+    readyState: track?.readyState ?? null,
   });
 }
 
@@ -75,6 +113,9 @@ export function CallProvider({ children }) {
   const sessionIdRef = useRef(null);
   const callTokenRef = useRef(0);
   const participantSharingRef = useRef(new Map());
+  const signalingListenerCountRef = useRef(0);
+  const candidateListenerCountRef = useRef(0);
+  const peerTrackListenerCountRef = useRef(new Map());
 
   useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
   useEffect(() => { cameraStreamRef.current = cameraStream; }, [cameraStream]);
@@ -110,7 +151,9 @@ export function CallProvider({ children }) {
     const peer = peers.current.get(uid);
     if (peer) peer.closedByApp = true;
     peer?.close();
+    clearTimeout(peer?.remoteTrackDiagnosticTimer);
     peers.current.delete(uid);
+    peerTrackListenerCountRef.current.delete(uid);
     setRemoteStreams((current) => {
       const next = { ...current };
       delete next[uid];
@@ -164,6 +207,7 @@ export function CallProvider({ children }) {
         sessionId: peer.localSessionId,
         sdp: offer.sdp,
       });
+      console.info("[VOICE DEBUG] offer enviado", { userId: remoteUid, hasAudio: offer.sdp?.includes("m=audio") ?? false });
     });
     peer.negotiationChain = negotiation.catch((error) => {
       peer.negotiationChain = Promise.resolve();
@@ -197,10 +241,11 @@ export function CallProvider({ children }) {
     const readyPromise = audioSender.replaceTrack(audioTrack ?? null);
     peer.readyPromise = readyPromise;
     peer.media = { audioSender, cameraVideoSender, screenAudioSender: screenAudioTransceiver.sender, screenVideoSender: videoTransceiver.sender, remoteAudioStream, remoteCameraStream, remoteScreenStream };
-    console.info("[VOICE DEBUG] local stream", Boolean(localStreamRef.current));
-    console.info("[VOICE DEBUG] audio tracks", localStreamRef.current?.getAudioTracks().length ?? 0);
-    console.info("[VOICE DEBUG] audio track", { enabled: audioTrack?.enabled ?? false, readyState: audioTrack?.readyState ?? "missing" });
-    console.info("[VOICE DEBUG] audio sender exists", Boolean(audioSender));
+    console.info("[VOICE DEBUG] PeerConnection criada", { userId: remoteUid, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, signalingState: peer.signalingState });
+    console.info("[VOICE DEBUG] PEER CONNECTION COUNT", { userId: remoteUid, connections: [...peers.current.keys()].filter((uid) => uid === remoteUid).length });
+    if ([...peers.current.keys()].filter((uid) => uid === remoteUid).length > 1) console.warn("[VOICE DEBUG] POSSIBLE DUPLICATE PEER CONNECTION", { userId: remoteUid });
+    logVoiceTrack("addTrack", audioTrack, remoteUid);
+    console.info("[VOICE DEBUG] addTrack transport", { userId: remoteUid, senders: peer.getSenders().length, receivers: peer.getReceivers().length });
     if (screenStreamRef.current) {
       peer.readyPromise = Promise.all([
         readyPromise,
@@ -211,12 +256,22 @@ export function CallProvider({ children }) {
     } else if (cameraStreamRef.current) {
       peer.readyPromise = Promise.all([readyPromise, cameraVideoSender.replaceTrack(cameraStreamRef.current.getVideoTracks()[0] ?? null)]);
     }
+    const onTrackListenerCount = (peerTrackListenerCountRef.current.get(remoteUid) ?? 0) + 1;
+    peerTrackListenerCountRef.current.set(remoteUid, onTrackListenerCount);
+    console.info("[VOICE DEBUG] ontrack listeners", { userId: remoteUid, listeners: onTrackListenerCount });
+    if (onTrackListenerCount > 1) console.warn("[VOICE DEBUG] POSSIBLE DUPLICATE LISTENER", { type: "ontrack", userId: remoteUid, listeners: onTrackListenerCount });
+    peer.remoteTrackReceived = false;
+    peer.remoteAudioTrackReceived = false;
     peer.ontrack = (event) => {
       if (peers.current.get(remoteUid) !== peer || peer.closedByApp) return;
       const isScreenTrack = event.transceiver === screenAudioTransceiver || event.transceiver === videoTransceiver;
       const isCameraTrack = event.transceiver === cameraVideoTransceiver;
       const stream = isScreenTrack ? remoteScreenStream : isCameraTrack ? remoteCameraStream : remoteAudioStream;
-      console.info("[VOICE DEBUG] REMOTE TRACK RECEIVED", { remoteUid, kind: event.track.kind, streamCount: event.streams.length });
+      peer.remoteTrackReceived = true;
+      console.info("[VOICE DEBUG] REMOTE TRACK RECEIVED", { userId: remoteUid, kind: event.track.kind, trackId: event.track.id, enabled: event.track.enabled, muted: event.track.muted, readyState: event.track.readyState, streamsLength: event.streams.length });
+      if (event.streams[0]) console.info("[VOICE DEBUG] REMOTE STREAM", { userId: remoteUid, streamId: event.streams[0].id, tracks: event.streams[0].getTracks().length, audioTracks: event.streams[0].getAudioTracks().map((track) => ({ id: track.id, enabled: track.enabled, muted: track.muted, readyState: track.readyState })) });
+      if (event.track.kind === "audio") console.info("[VOICE DEBUG] REMOTE AUDIO TRACK", { userId: remoteUid, trackId: event.track.id, enabled: event.track.enabled, muted: event.track.muted, readyState: event.track.readyState, streamId: event.streams[0]?.id ?? null, audioTracks: event.streams[0]?.getAudioTracks().length ?? 0 });
+      if (event.track.kind === "audio") peer.remoteAudioTrackReceived = true;
       if (!stream.getTracks().some((track) => track.id === event.track.id)) stream.addTrack(event.track);
       if (isScreenTrack) console.info("[WebRTC][ScreenShare] track received", remoteUid, event.track.kind);
       if (isScreenTrack) {
@@ -235,6 +290,7 @@ export function CallProvider({ children }) {
       };
       debugVoiceConnection(peer, remoteUid).catch((error) => console.error("[VOICE DEBUG] stats failed", error));
     };
+    console.info("[VOICE DEBUG] ontrack handler attached", { userId: remoteUid, handler: typeof peer.ontrack });
     peer.onicecandidate = async (event) => {
       if (!event.candidate) return;
       try {
@@ -245,12 +301,21 @@ export function CallProvider({ children }) {
           sessionId: peer.localSessionId,
           candidate: event.candidate.toJSON(),
         });
+        console.info("[VOICE DEBUG] ICE candidate enviado", { userId: remoteUid });
       } catch (error) {
         setMediaError(`Falha ao enviar ICE candidate: ${error.message}`);
       }
     };
     peer.onconnectionstatechange = () => {
-      console.info("[VOICE DEBUG] connection state", remoteUid, peer.connectionState, peer.iceConnectionState, peer.iceGatheringState, peer.signalingState);
+      console.info("[VOICE DEBUG] connectionState changed", { userId: remoteUid, state: peer.connectionState });
+      console.info("[VOICE DEBUG] PeerConnection state", { userId: remoteUid, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, signalingState: peer.signalingState });
+      if (peer.connectionState === "connected") {
+        debugPeerTransport(peer, remoteUid, peers.current);
+        clearTimeout(peer.remoteTrackDiagnosticTimer);
+        peer.remoteTrackDiagnosticTimer = setTimeout(() => {
+          if (!peer.remoteTrackReceived && peers.current.get(remoteUid) === peer) console.warn("[VOICE DEBUG] NO REMOTE TRACK RECEIVED", { userId: remoteUid, windowMs: 10000 });
+        }, 10000);
+      }
       if (["failed", "disconnected"].includes(peer.connectionState) || ["failed", "disconnected"].includes(peer.iceConnectionState)) schedulePeerRecovery(remoteUid);
       if (peer.connectionState === "connected") {
         const reconnectTimer = reconnectTimers.current.get(remoteUid);
@@ -259,7 +324,7 @@ export function CallProvider({ children }) {
       }
     };
     peer.oniceconnectionstatechange = () => {
-      console.info("[VOICE DEBUG] ICE state", remoteUid, peer.iceConnectionState);
+      console.info("[VOICE DEBUG] iceConnectionState changed", { userId: remoteUid, state: peer.iceConnectionState });
       if (["failed", "disconnected"].includes(peer.iceConnectionState)) schedulePeerRecovery(remoteUid);
     };
 
@@ -274,6 +339,10 @@ export function CallProvider({ children }) {
     const roomId = roomIdRef.current;
     const signalsQuery = query(collection(db, "rooms", roomId, "signals"), where("to", "==", firebaseUser.uid));
     const candidatesQuery = query(collection(db, "rooms", roomId, "candidates"), where("to", "==", firebaseUser.uid));
+    signalingListenerCountRef.current += 1;
+    candidateListenerCountRef.current += 1;
+    console.info("[VOICE DEBUG] signaling listeners", { firestore: signalingListenerCountRef.current, iceCandidates: candidateListenerCountRef.current });
+    if (signalingListenerCountRef.current > 1 || candidateListenerCountRef.current > 1) console.warn("[VOICE DEBUG] POSSIBLE DUPLICATE LISTENER", { signaling: signalingListenerCountRef.current, iceCandidates: candidateListenerCountRef.current });
     const unsubscribeSignals = onSnapshot(signalsQuery, (snapshot) => enqueueSignal(async () => {
       try {
         for (const change of snapshot.docChanges()) {
@@ -310,6 +379,7 @@ export function CallProvider({ children }) {
               offerSessionId: signal.sessionId ?? null,
               sdp: answer.sdp,
             });
+            console.info("[VOICE DEBUG] answer enviado", { userId: signal.from, hasAudio: answer.sdp?.includes("m=audio") ?? false });
           } else if (signal.type === "answer") {
             if (peer.signalingState !== "have-local-offer") continue;
             if (signal.offerSessionId && signal.offerSessionId !== peer.localSessionId) continue;
@@ -332,17 +402,20 @@ export function CallProvider({ children }) {
           if (!candidate.sessionId) continue;
           if (processedCandidates.current.has(change.doc.id)) continue;
           const peer = await createPeer(candidate.from, false);
+          console.info("[VOICE DEBUG] ICE candidate recebido", { userId: candidate.from });
           if (candidate.sessionId && peer.remoteSessionId && candidate.sessionId !== peer.remoteSessionId) {
             processedCandidates.current.add(change.doc.id);
             continue;
           }
           if (peer.currentRemoteDescription) {
             await peer.addIceCandidate(candidate.candidate);
+            console.info("[VOICE DEBUG] ICE candidate aplicado", { userId: candidate.from });
             processedCandidates.current.add(change.doc.id);
           } else {
             const queued = pendingCandidates.current.get(candidate.from) ?? [];
             pendingCandidates.current.set(candidate.from, [...queued, { sessionId: candidate.sessionId, candidate: candidate.candidate }]);
             processedCandidates.current.add(change.doc.id);
+            console.info("[VOICE DEBUG] ICE candidate enfileirado", { userId: candidate.from });
           }
         }
       } catch (error) {
@@ -354,6 +427,8 @@ export function CallProvider({ children }) {
       cancelled = true;
       unsubscribeSignals();
       unsubscribeCandidates();
+      signalingListenerCountRef.current -= 1;
+      candidateListenerCountRef.current -= 1;
     };
   }, [firebaseUser, localStream]);
 
@@ -394,12 +469,11 @@ export function CallProvider({ children }) {
       setIsConnecting(true);
       sessionIdRef.current = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("Seu navegador não oferece acesso ao microfone.");
+      console.info("[VOICE DEBUG] getUserMedia iniciado");
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const audioTracks = stream.getAudioTracks();
-      console.info("[VOICE DEBUG] local stream", stream.id ? "available" : "missing");
-      console.info("[VOICE DEBUG] audio tracks", audioTracks.length);
-      console.info("[VOICE DEBUG] audio track enabled", audioTracks[0]?.enabled ?? false);
-      console.info("[VOICE DEBUG] audio track readyState", audioTracks[0]?.readyState ?? "missing");
+      console.info("[VOICE DEBUG] local stream criada", { streamId: stream.id, tracks: stream.getTracks().length, audioTracks: audioTracks.length });
+      audioTracks.forEach((track) => logVoiceTrack("local audio track", track, firebaseUser.uid));
       if (!audioTracks.length) throw new Error("O microfone não forneceu uma faixa de áudio.");
       if (callToken !== callTokenRef.current) {
         stream.getTracks().forEach((track) => track.stop());

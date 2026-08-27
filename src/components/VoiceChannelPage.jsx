@@ -59,6 +59,14 @@ function VoiceChannelContent({ roomId }) {
   useEffect(() => {
     try { localStorage.setItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`, JSON.stringify(volumes)); } catch {}
   }, [firebaseUser, volumes]);
+  useEffect(() => {
+    if (!Object.keys(remoteStreams).length) return undefined;
+    const timer = setTimeout(() => console.info("[VOICE DEBUG] AUDIO ELEMENTS", {
+      count: document.querySelectorAll("audio").length,
+      items: [...document.querySelectorAll("audio")].map((audio) => ({ srcObject: audio.srcObject !== null, paused: audio.paused, muted: audio.muted, volume: audio.volume, readyState: audio.readyState, autoplay: audio.autoplay })),
+    }), 10000);
+    return () => clearTimeout(timer);
+  }, [remoteStreams]);
 
   async function submitMessage(event) {
     event.preventDefault();
@@ -102,8 +110,8 @@ function VoiceChannelContent({ roomId }) {
           const participantCamera = participant.uid === firebaseUser?.uid ? cameraStream : remoteCameraStreams?.[participant.uid];
           return <div className="voice-participant" key={participant.uid}><ParticipantCamera stream={cameraIsActive ? participantCamera : null} label={participant.displayName} /><span className="presence-dot" /><div><strong>{participant.displayName}</strong><small>{participant.uid === firebaseUser?.uid ? "Você" : "na sala"}</small></div><span className="participant-audio">{participant.muted ? <MicOff size={15} /> : <Mic size={15} />}</span>{isSharing && <span className="screen-share-label">📺 {participant.screenAudio ? "🔊" : ""}</span>}{participant.uid !== firebaseUser?.uid && <button className="icon-button participant-message" onClick={() => openPrivateChat({ uid: participant.uid, displayName: participant.displayName })} title="Mensagem privada"><MessageCircle size={15} /></button>}{participant.uid !== firebaseUser?.uid && <div className="participant-volume"><button className="icon-button" onClick={() => setVolumes((current) => ({ ...current, [participant.uid]: participantVolume === 0 ? 1 : 0 }))} title={participantVolume === 0 ? `Ativar ${participant.displayName}` : `Silenciar ${participant.displayName}`}>{participantVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}</button><button className="icon-button" onClick={() => setVolumeTarget(volumeTarget === participant.uid ? null : participant.uid)} title="Volume individual">{Math.round(participantVolume * 100)}%</button>{volumeTarget === participant.uid && <input type="range" min="0" max="1" step="0.05" value={participantVolume} onChange={(event) => setVolumes((current) => ({ ...current, [participant.uid]: Number(event.target.value) }))} aria-label={`Volume de ${participant.displayName}`} />}</div>}</div>;
         })}</div>
-        {Object.entries(remoteStreams).map(([uid, stream]) => <RemoteAudio key={uid} stream={stream} volume={volumes[uid] ?? 1} onBlocked={() => setAudioBlocked(true)} />)}
-        {audioBlocked && <button className="secondary-button" onClick={() => { document.querySelectorAll("audio").forEach((audio) => audio.play().catch((error) => console.error("[VOICE DEBUG] audio.play failed", error))); setAudioBlocked(false); }}>Ativar áudio</button>}
+        {Object.entries(remoteStreams).map(([uid, stream]) => <RemoteAudio key={uid} userId={uid} stream={stream} volume={volumes[uid] ?? 1} onBlocked={() => setAudioBlocked(true)} />)}
+        {audioBlocked && <button className="secondary-button" onClick={() => { document.querySelectorAll("audio").forEach((audio) => audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { retry: true })).catch((error) => console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { name: error.name, message: error.message }))); setAudioBlocked(false); }}>Ativar áudio</button>}
         <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={() => setAudioEnabled(toggleAudio())} title={audioEnabled ? "Silenciar" : "Ativar microfone"}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button ${cameraStream ? "active" : ""}`} onClick={toggleCamera} disabled={isCameraBusy} title={cameraStream ? "Desligar webcam" : "Ligar webcam"}>{cameraStream ? <Camera /> : <CameraOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={screenStream ? stopScreenShare : shareScreen} title={screenStream ? "Parar compartilhamento" : "Compartilhar tela"}><MonitorUp /><span>{screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
       </section>
       <section className="room-chat"><div className="voice-section-title"><span><Headphones size={16} /> Chat da sala</span><span className="chat-live">tempo real</span></div><div className="room-message-list">{messages.length === 0 && <p className="voice-empty">As mensagens desta sala aparecerão aqui.</p>}{messages.map((message) => <article className="room-message" key={message.id}><strong>{message.authorName}</strong><p>{message.text}</p></article>)}</div>{messageError && <p className="error-message">{messageError}</p>}<form className="room-message-form" onSubmit={submitMessage}><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Conversar em voz..." maxLength={500} /><button className="icon-button" disabled={!messageText.trim()} title="Enviar mensagem"><Send size={16} /></button></form></section>
@@ -113,20 +121,29 @@ function VoiceChannelContent({ roomId }) {
   </div>;
 }
 
-function RemoteAudio({ stream, volume, onBlocked }) {
+function RemoteAudio({ userId, stream, volume, onBlocked }) {
   const audioRef = useRef(null);
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return undefined;
     audio.srcObject = stream;
-    audio.muted = false;
-    console.info("[VOICE DEBUG] audio element", { volume: audio.volume, muted: audio.muted, tracks: stream.getAudioTracks().length });
-    audio.play().catch((error) => { if (error.name !== "AbortError") { console.error("[VOICE DEBUG] audio.play failed", error); onBlocked(); } });
+    console.info("[VOICE DEBUG] REMOTE STREAM ATTACHED", { userId, streamId: stream.id, tracks: stream.getTracks().length, audioTracks: stream.getAudioTracks().length });
+    console.info("[VOICE DEBUG] REMOTE AUDIO ELEMENT", { userId, exists: Boolean(audio), srcObject: audio.srcObject !== null, paused: audio.paused, muted: audio.muted, volume: audio.volume, readyState: audio.readyState, autoplay: audio.autoplay });
+    console.info("[VOICE DEBUG] REMOTE AUDIO STATE", { userId, muted: audio.muted, volume: audio.volume, paused: audio.paused, readyState: audio.readyState });
+    console.info("[VOICE DEBUG] REMOTE AUDIO PLAY ATTEMPT", { userId });
+    audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { userId })).catch((error) => {
+      console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { userId, name: error.name, message: error.message });
+      if (error.name === "NotAllowedError") console.warn("[VOICE DEBUG] AUTOPLAY BLOCKED", { userId });
+      if (error.name !== "AbortError") onBlocked();
+    });
     return () => { audio.srcObject = null; };
   }, [stream, onBlocked]);
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
-  }, [volume]);
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+      console.info("[VOICE DEBUG] REMOTE AUDIO STATE", { userId, muted: audioRef.current.muted, volume: audioRef.current.volume, paused: audioRef.current.paused, readyState: audioRef.current.readyState });
+    }
+  }, [stream, volume]);
   return <audio ref={audioRef} autoPlay playsInline />;
 }
 
