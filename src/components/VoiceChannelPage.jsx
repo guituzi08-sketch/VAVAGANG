@@ -27,9 +27,10 @@ function VoiceChannelContent({ roomId }) {
   const navigate = useNavigate();
   const { openPrivateChat } = useDirectMessages();
   const { effects, error: soundError, audioBlocked, setAudioBlocked, trigger, upload, remove } = useSoundEffects(roomId);
-  const { participants, remoteStreams, remoteCameraStreams, remoteScreenStreams, cameraStream, screenStream, mediaError, roomClosed, roomClosedMessage, enterCall, exitCall, toggleAudio, startCamera, stopCamera, shareScreen, stopScreenShare, localStream, isConnecting } = useCall();
+  const { participants, remoteStreams, remoteCameraStreams, remoteScreenStreams, cameraStream, screenStream, mediaError, roomClosed, roomClosedMessage, enterCall, exitCall, toggleAudio, startCamera, stopCamera, shareScreen, stopScreenShare, localStream, isConnecting, callState } = useCall();
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [messageError, setMessageError] = useState("");
   const [volumes, setVolumes] = useState(() => {
@@ -70,7 +71,10 @@ function VoiceChannelContent({ roomId }) {
 
   async function submitMessage(event) {
     event.preventDefault();
+    if (isSendingMessage || !messageText.trim()) return;
+    setIsSendingMessage(true);
     try { await sendRoomMessage(roomId, firebaseUser, messageText); setMessageText(""); setMessageError(""); } catch (error) { setMessageError(error.message); }
+    finally { setIsSendingMessage(false); }
   }
 
   async function submitSoundEffect(event) {
@@ -95,9 +99,16 @@ function VoiceChannelContent({ roomId }) {
     } finally { setIsCameraBusy(false); }
   }
 
+  async function toggleMicrophone() {
+    const enabled = await toggleAudio();
+    setAudioEnabled(enabled);
+  }
+
+  const callStatusLabel = { idle: "aguardando", "requesting-media": "solicitando microfone", "media-ready": "microfone pronto", joining: "entrando", connected: "voz ativa", reconnecting: "reconectando", leaving: "saindo", ended: "encerrada", failed: "falhou" }[callState] ?? "voz ativa";
+
   const sharedScreens = Object.entries(remoteScreenStreams ?? {}).filter(([, stream]) => stream.getVideoTracks().length > 0);
   return <div className="voice-channel-page">
-    <header className="voice-channel-header"><div><p className="eyebrow">Canal de voz</p><h1><span className="voice-glyph">🔊</span> {roomName || roomId}</h1><p className="muted">Conversa ao vivo com sua comunidade.</p></div><div className="voice-channel-state"><span className="live-dot" />{isConnecting ? "conectando" : "voz ativa"}</div></header>
+    <header className="voice-channel-header"><div><p className="eyebrow">Canal de voz</p><h1><span className="voice-glyph">🔊</span> {roomName || roomId}</h1><p className="muted">Conversa ao vivo com sua comunidade.</p></div><div className={`voice-channel-state voice-state-${callState}`}><span className="live-dot" />{isConnecting ? "conectando" : callStatusLabel}</div></header>
     {screenStream && <section className="screen-share-stage"><ScreenShareViewer stream={screenStream} label="Você está compartilhando a tela" muted /></section>}
     {sharedScreens.map(([uid, stream]) => <section className="screen-share-stage" key={uid}><ScreenShareViewer stream={stream} label={`${participants.find((participant) => participant.uid === uid)?.displayName ?? "Participante"} está compartilhando a tela`} /></section>)}
     <div className="voice-channel-grid">
@@ -112,9 +123,9 @@ function VoiceChannelContent({ roomId }) {
         })}</div>
         {Object.entries(remoteStreams).map(([uid, stream]) => <RemoteAudio key={uid} userId={uid} stream={stream} volume={volumes[uid] ?? 1} onBlocked={() => setAudioBlocked(true)} />)}
         {audioBlocked && <button className="secondary-button" onClick={() => { document.querySelectorAll("audio").forEach((audio) => audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { retry: true })).catch((error) => console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { name: error.name, message: error.message }))); setAudioBlocked(false); }}>Ativar áudio</button>}
-        <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={() => setAudioEnabled(toggleAudio())} title={audioEnabled ? "Silenciar" : "Ativar microfone"}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button ${cameraStream ? "active" : ""}`} onClick={toggleCamera} disabled={isCameraBusy} title={cameraStream ? "Desligar webcam" : "Ligar webcam"}>{cameraStream ? <Camera /> : <CameraOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={screenStream ? stopScreenShare : shareScreen} title={screenStream ? "Parar compartilhamento" : "Compartilhar tela"}><MonitorUp /><span>{screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
+        <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={toggleMicrophone} title={audioEnabled ? "Silenciar" : "Ativar microfone"}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button ${cameraStream ? "active" : ""}`} onClick={toggleCamera} disabled={isCameraBusy} title={cameraStream ? "Desligar webcam" : "Ligar webcam"}>{cameraStream ? <Camera /> : <CameraOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={screenStream ? stopScreenShare : shareScreen} title={screenStream ? "Parar compartilhamento" : "Compartilhar tela"}><MonitorUp /><span>{screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
       </section>
-      <section className="room-chat"><div className="voice-section-title"><span><Headphones size={16} /> Chat da sala</span><span className="chat-live">tempo real</span></div><div className="room-message-list">{messages.length === 0 && <p className="voice-empty">As mensagens desta sala aparecerão aqui.</p>}{messages.map((message) => <article className="room-message" key={message.id}><strong>{message.authorName}</strong><p>{message.text}</p></article>)}</div>{messageError && <p className="error-message">{messageError}</p>}<form className="room-message-form" onSubmit={submitMessage}><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Conversar em voz..." maxLength={500} /><button className="icon-button" disabled={!messageText.trim()} title="Enviar mensagem"><Send size={16} /></button></form></section>
+      <section className="room-chat"><div className="voice-section-title"><span><Headphones size={16} /> Chat da sala</span><span className="chat-live">tempo real</span></div><div className="room-message-list">{messages.length === 0 && <p className="voice-empty">As mensagens desta sala aparecerão aqui.</p>}{messages.map((message) => <article className="room-message" key={message.id}><strong>{message.authorName}</strong><p>{message.text}</p></article>)}</div>{messageError && <p className="error-message">{messageError}</p>}<form className="room-message-form" onSubmit={submitMessage}><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Conversar em voz..." maxLength={500} disabled={isSendingMessage} /><button className="icon-button" disabled={!messageText.trim() || isSendingMessage} title="Enviar mensagem"><Send size={16} /></button></form></section>
       <section className="sound-effects-panel"><div className="voice-section-title"><span><Music2 size={16} /> Efeitos sonoros</span><span className="chat-live">compartilhado</span></div><div className="sound-effect-list">{effects.length === 0 && <p className="voice-empty">Adicione um efeito para a sala.</p>}{effects.map((effect, index) => <div className="sound-effect-pad-wrap" key={effect.id}><button className="sound-effect-button" style={{ "--pad-accent": ["#5aa7ff", "#61d8b0", "#a993ff", "#ffb86b"][index % 4] }} onClick={() => trigger(effect)} title={`Reproduzir ${effect.name}`}><Music2 size={20} /><span>{effect.name}</span></button>{effect.createdBy === firebaseUser?.uid && <button className="sound-effect-delete" onClick={async () => { if (!window.confirm(`Excluir o efeito \"${effect.name}\"?`)) return; try { await remove(effect); } catch {} }} title="Excluir efeito"><Trash2 size={13} /> Excluir</button>}</div>)}</div><form className="sound-effect-form" onSubmit={submitSoundEffect}><input value={soundName} onChange={(event) => setSoundName(event.target.value)} placeholder="Nome opcional" maxLength={60} /><label className="sound-upload-button" title="Selecionar MP3 ou WAV"><Upload size={15} /><span>Adicionar áudio</span><input name="soundFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav" /></label><button className="secondary-button sound-upload-submit" type="submit" disabled={isUploading}>{isUploading ? "Enviando..." : "Enviar"}</button></form>{soundError && <p className="error-message">{soundError}</p>}{audioBlocked && <button className="secondary-button sound-unlock" onClick={() => setAudioBlocked(false)}>Ativar efeitos</button>}</section>
     </div>
     {mediaError && <p className="error-message voice-error">{mediaError}</p>}
