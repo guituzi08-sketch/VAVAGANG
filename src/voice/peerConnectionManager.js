@@ -42,7 +42,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), localOfferId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const audio = pc.addTransceiver("audio", { direction: "sendrecv" });
     const camera = pc.addTransceiver("video", { direction: "sendrecv" });
@@ -74,7 +74,8 @@ export class PeerConnectionManager {
       try {
         const offer = await state.pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
         await state.pc.setLocalDescription(offer);
-        await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, type: "offer", callSessionId: this.callSessionId, sessionId: state.localSessionId, sdp: offer.sdp });
+        state.localOfferId = createSessionId();
+        await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, type: "offer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: state.localOfferId, sdp: offer.sdp });
       } finally { state.makingOffer = false; }
     }).catch((error) => this.reportPeerError(error, state.remoteUid));
     return state.negotiation;
@@ -107,11 +108,11 @@ export class PeerConnectionManager {
     await this.flushCandidates(state);
     const answer = await state.pc.createAnswer();
     await state.pc.setLocalDescription(answer);
-    await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, type: "answer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerSessionId: signal.sessionId, sdp: answer.sdp });
+    await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, type: "answer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: signal.offerId ?? signal.sessionId, sdp: answer.sdp });
   }
 
   async handleAnswer(state, signal) {
-    if (signal.offerSessionId !== state.localSessionId || state.pc.signalingState !== "have-local-offer") return;
+    if (signal.offerId !== state.localOfferId || state.pc.signalingState !== "have-local-offer") return;
     await state.pc.setRemoteDescription({ type: "answer", sdp: signal.sdp });
     state.remoteDescriptionSet = true;
     state.remoteSessionId = signal.sessionId;
