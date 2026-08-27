@@ -61,6 +61,7 @@ export class PeerConnectionManager {
   handleTrack(state, event) {
     const { audio, camera, screen, screenAudio } = state.transceivers;
     const target = event.transceiver === camera ? state.remoteCameraStream : event.transceiver === screen || event.transceiver === screenAudio ? state.remoteScreenStream : state.remoteAudioStream;
+    target.getTracks().filter((track) => track.id !== event.track.id && track.kind === event.track.kind).forEach((track) => target.removeTrack(track));
     if (!target.getTracks().some((track) => track.id === event.track.id)) target.addTrack(event.track);
     this.onRemoteStream(state.remoteUid, { audio: state.remoteAudioStream, camera: state.remoteCameraStream, screen: state.remoteScreenStream });
     event.track.onended = () => { if (target.getTracks().some((track) => track.id === event.track.id)) target.removeTrack(event.track); this.onRemoteStream(state.remoteUid, { audio: state.remoteAudioStream, camera: state.remoteCameraStream, screen: state.remoteScreenStream }); };

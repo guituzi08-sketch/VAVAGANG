@@ -67,3 +67,16 @@ test("ignora sinal de sessão remota antiga", async () => {
   assert.equal(peer.pc.getSenders().length, 4);
   manager.close();
 });
+
+test("renegociação substitui a track remota anterior do mesmo tipo", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({ db: {}, roomId: "room", localUid: "a", callSessionId: "call", localStream: new FakeMediaStream([{ kind: "audio" }]), onRemoteStream() {}, onPeerState() {}, onError() {} });
+  const state = await manager.ensurePeer("b");
+  const firstTrack = { kind: "audio", id: "remote-a" };
+  const secondTrack = { kind: "audio", id: "remote-b" };
+  state.transceivers.audio.receiver.track = firstTrack;
+  manager.handleTrack(state, { track: firstTrack, transceiver: state.transceivers.audio });
+  manager.handleTrack(state, { track: secondTrack, transceiver: state.transceivers.audio });
+  assert.deepEqual(state.remoteAudioStream.getAudioTracks(), [secondTrack]);
+  manager.close();
+});
