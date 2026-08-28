@@ -1,10 +1,12 @@
-import { AtSign, Bell, Camera, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Search, Send, Settings, ShoppingBag, UsersRound } from "lucide-react";
+import { AtSign, Bell, Camera, Flame, Headphones, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Send, Settings, ShoppingBag, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
+import { createRoom, subscribeToRooms } from "../services/roomService";
 import ScreenShareViewer from "./ScreenShareViewer";
+import { getErrorMessage } from "../utils/errorMessage";
 
 const primaryNavigation = [
   { to: "/", label: "Início", icon: Home, end: true },
@@ -27,12 +29,18 @@ function RailButton({ label, icon: Icon, to }) {
 }
 
 export default function AppShell() {
-  const { profile, logout } = useAuth();
+  const { firebaseUser, profile, logout } = useAuth();
   const navigate = useNavigate();
   const { activeRoomId } = useCall();
   const { unreadCount, contact, messages, closePrivateChat, sendMessage, error: directMessageError } = useDirectMessages();
+  const [rooms, setRooms] = useState([]);
+  const [isRoomComposerOpen, setRoomComposerOpen] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [isCreatingRoom, setCreatingRoom] = useState(false);
+  const [roomError, setRoomError] = useState("");
   const [directText, setDirectText] = useState("");
   const [isSendingDirectMessage, setSendingDirectMessage] = useState(false);
+  useEffect(() => subscribeToRooms(setRooms, (error) => setRoomError(getErrorMessage(error, "Não foi possível carregar as salas."))), []);
   useEffect(() => {
     function handleShortcut(event) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -43,6 +51,23 @@ export default function AppShell() {
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [navigate]);
+
+  async function handleCreateRoom(event) {
+    event.preventDefault();
+    if (!roomName.trim() || isCreatingRoom) return;
+    setCreatingRoom(true);
+    try {
+      const roomId = await createRoom(roomName, firebaseUser);
+      setRoomName("");
+      setRoomComposerOpen(false);
+      setRoomError("");
+      navigate(`/voice/${roomId}`);
+    } catch (error) {
+      setRoomError(getErrorMessage(error, "Não foi possível criar a sala."));
+    } finally {
+      setCreatingRoom(false);
+    }
+  }
 
   return <div className="workspace-shell">
     <aside className="community-rail" aria-label="Navegação principal">
@@ -57,10 +82,11 @@ export default function AppShell() {
     </aside>
     <aside className="navigation-panel" aria-label="Navegação da seção">
       <div className="navigation-header"><strong>VAVAGANG</strong><NavLink className="icon-button" to="/search" title="Pesquisar"><Search size={16} /></NavLink></div>
-      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink></nav>
+      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink><div className="voice-navigation"><div className="channel-heading"><span>Voz</span><button className="nav-add" onClick={() => setRoomComposerOpen((current) => !current)} title="Criar sala"><Plus size={15} /></button></div><button className="voice-create-button" onClick={() => setRoomComposerOpen(true)}><Plus size={15} /> Criar sala</button>{isRoomComposerOpen && <form className="voice-create-form" onSubmit={handleCreateRoom}><input value={roomName} onChange={(event) => setRoomName(event.target.value)} placeholder="Nome da sala" maxLength={60} autoFocus /><button className="primary-button" disabled={!roomName.trim() || isCreatingRoom}>{isCreatingRoom ? "Criando..." : "Criar"}</button></form>}{roomError && <p className="navigation-error">{roomError}</p>}{rooms.map((room) => <NavLink className="nav-item voice-nav-item" to={`/voice/${room.id}`} key={room.id}><Headphones size={16} /><span>{room.name}</span><small>{room.participantCount ?? 0}</small></NavLink>)}{rooms.length === 0 && <p className="navigation-empty">Nenhuma sala disponível.</p>}</div></nav>
       <div className="navigation-footer"><div className="footer-user"><div className="avatar avatar-fallback">{profile?.displayName?.[0] ?? "V"}</div><div><strong>{profile?.displayName ?? "Usuário"}</strong><span>online no app</span></div></div><div className="footer-actions"><NavLink className="icon-button" to="/settings" title="Configurações"><Settings size={16} /></NavLink><button className="icon-button" onClick={logout} title="Sair"><LogOut size={16} /></button></div></div>
     </aside>
       <section className="workspace-main"><Outlet /></section>
+    <div className="mobile-voice-navigation"><div className="mobile-voice-heading"><span>Voz</span><button onClick={() => setRoomComposerOpen((current) => !current)} title="Criar sala"><Plus size={15} /></button></div>{isRoomComposerOpen && <form className="mobile-voice-form" onSubmit={handleCreateRoom}><input value={roomName} onChange={(event) => setRoomName(event.target.value)} placeholder="Nome da sala" maxLength={60} /><button className="primary-button" disabled={!roomName.trim() || isCreatingRoom}>{isCreatingRoom ? "Criando..." : "Criar"}</button></form>}<div className="mobile-voice-list">{rooms.map((room) => <NavLink to={`/voice/${room.id}`} key={room.id}><Headphones size={14} /><span>{room.name}</span></NavLink>)}{rooms.length === 0 && <span className="mobile-voice-empty">Nenhuma sala</span>}</div></div>
       {activeRoomId && <VoiceMiniPlayer onOpen={() => navigate(`/voice/${activeRoomId}`)} />}
       {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} isSending={isSendingDirectMessage} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); if (isSendingDirectMessage || !directText.trim()) return; setSendingDirectMessage(true); try { await sendMessage(directText); setDirectText(""); } catch (error) { console.error("[DirectMessage] falha ao enviar pela interface", error); } finally { setSendingDirectMessage(false); } }} />}
   </div>;
