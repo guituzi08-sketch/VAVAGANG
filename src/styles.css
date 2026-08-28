@@ -594,6 +594,10 @@ body::after { opacity: .025; background: repeating-linear-gradient(0deg, transpa
 .voice-tile { border-color: #4b2a68; background: #120a1a; }.voice-tile:hover, .available-rooms > button:hover { border-color: var(--blue); background: #251236; }
 .connected, .moment-live-dot, .moment-signal { color: #e28cff; }
 .dashboard-avatar-fallback, .avatar-fallback { color: #1a0924; background: linear-gradient(145deg, #e08bff, #9d38cd); }
+.available-room-row { display: flex; align-items: center; gap: 4px; }
+.available-room-row > button:first-child { min-width: 0; flex: 1; }
+.room-delete-action { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid #51304f; color: #ff72ac; background: #160b18; }
+.room-delete-action:hover { border-color: #ff72ac; background: #35112e; box-shadow: 0 0 14px #ff5c9a44; }
 .vavax-status, .vavax-brand > span { color: var(--blue-bright); }.vavax-brand > span { background: #bd5cff22; border-color: #bd5cff88; }
 .settings-nav-item.active { color: #efcfff; border-color: #bd5cff66; background: #29123d; }
 .settings-select:focus, .settings-field input:focus, .settings-field textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #bd5cff22; }
