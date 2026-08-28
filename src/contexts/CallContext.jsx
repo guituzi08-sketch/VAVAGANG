@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { getRoom, joinRoom, leaveRoom, subscribeToParticipants, subscribeToRoom, updateParticipantState } from "../services/roomService";
+import { getRoom, joinRoom, leaveRoom, refreshParticipantPresence, subscribeToParticipants, subscribeToRoom, updateParticipantState } from "../services/roomService";
 import { requestCamera, requestMicrophone, requestScreen, stopMediaStream } from "../voice/localMediaManager";
 import { PeerConnectionManager } from "../voice/peerConnectionManager";
 import { subscribeToSignaling } from "../voice/signalingService";
@@ -8,6 +8,7 @@ import { CALL_STATES, createSessionId } from "../voice/voiceState";
 import { useAuth } from "./AuthContext";
 
 const CallContext = createContext(null);
+const PARTICIPANT_TIMEOUT_MS = 45_000;
 const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, ...(import.meta.env.VITE_TURN_URL ? [{ urls: import.meta.env.VITE_TURN_URL, username: import.meta.env.VITE_TURN_USERNAME, credential: import.meta.env.VITE_TURN_CREDENTIAL }] : [])], iceCandidatePoolSize: 10 };
 
 export function CallProvider({ children }) {
@@ -77,10 +78,21 @@ export function CallProvider({ children }) {
       sessionRef.current = { roomId: room.id, callSessionId }; setActiveRoomId(room.id); setCallState(CALL_STATES.JOINING);
       const manager = new PeerConnectionManager({ db, roomId: room.id, localUid: firebaseUser.uid, callSessionId, localStream: stream, rtcConfig, onRemoteStream: setRemoteStream, onPeerState: (_, state) => { if (state === "connected") setCallState(CALL_STATES.CONNECTED); if (["failed", "disconnected"].includes(state)) setCallState(CALL_STATES.RECONNECTING); }, onError: reportError });
       managerRef.current = manager;
-      const unsubscribeParticipants = subscribeToParticipants(room.id, (next) => { setParticipants(next); manager.syncParticipants(next); }, reportError);
+      const unsubscribeParticipants = subscribeToParticipants(room.id, (next) => {
+        const now = Date.now();
+        const activeParticipants = next.filter((participant) => {
+          const lastSeen = participant.lastSeen?.toMillis?.() ?? participant.lastSeen;
+          return typeof lastSeen === "number" && now - lastSeen <= PARTICIPANT_TIMEOUT_MS;
+        });
+        setParticipants(activeParticipants);
+        manager.syncParticipants(activeParticipants);
+      }, reportError);
       const unsubscribeSignals = subscribeToSignaling(db, room.id, firebaseUser.uid, { onSignal: (signal) => manager.handleSignal(signal).catch((error) => reportError(error, signal.from)), onCandidate: (candidate) => manager.handleCandidate(candidate).catch((error) => reportError(error, candidate.from)), onError: reportError });
       const unsubscribeRoom = subscribeToRoom(room.id, (currentRoom) => { if (!currentRoom || currentRoom.status === "closed") { setRoomClosed(true); setRoomClosedMessage(currentRoom ? "Esta sala foi encerrada pelo proprietário." : "Esta sala não existe mais."); leaveCurrentRoom(); } }, reportError);
-      cleanupRef.current = () => { unsubscribeParticipants(); unsubscribeSignals(); unsubscribeRoom(); }; setCallState(CALL_STATES.CONNECTED);
+      const presenceTimer = window.setInterval(() => {
+        refreshParticipantPresence(room.id, firebaseUser.uid).catch(reportError);
+      }, 15_000);
+      cleanupRef.current = () => { window.clearInterval(presenceTimer); unsubscribeParticipants(); unsubscribeSignals(); unsubscribeRoom(); }; setCallState(CALL_STATES.CONNECTED);
     }).catch(async (error) => { if (sessionRef.current) await leaveCurrentRoom(); else clearSession(); reportError(error); });
     return operationRef.current;
   }

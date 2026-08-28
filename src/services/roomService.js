@@ -91,6 +91,10 @@ export async function updateParticipantState(roomId, uid, changes) {
   await updateDoc(doc(db, "rooms", roomId, "participants", uid), changes);
 }
 
+export async function refreshParticipantPresence(roomId, uid) {
+  await updateParticipantState(roomId, uid, { status: "online", lastSeen: serverTimestamp() });
+}
+
 export function subscribeToRoomMessages(roomId, onChange, onError) {
   return onSnapshot(query(collection(db, "rooms", roomId, "messages"), orderBy("createdAt", "asc")), (snapshot) => {
     onChange(snapshot.docs.map((message) => ({ id: message.id, ...message.data() })));
@@ -120,6 +124,7 @@ export async function joinRoom(roomId, user, profile = {}, callSessionId = null)
       displayName: profile.nickname || profile.displayName || user.displayName || user.email || "Jogador",
       photoURL: user.photoURL ?? "",
       status: "online",
+      lastSeen: serverTimestamp(),
       muted: false,
       speaking: false,
       cameraEnabled: false,
@@ -129,7 +134,7 @@ export async function joinRoom(roomId, user, profile = {}, callSessionId = null)
       joinedAt: serverTimestamp(),
     };
     if (participantSnapshot.exists()) {
-      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online", cameraEnabled: false, screenSharing: false, screenAudio: false, callSessionId });
+      transaction.update(participantRef, { displayName: participantData.displayName, photoURL: participantData.photoURL, status: "online", lastSeen: serverTimestamp(), cameraEnabled: false, screenSharing: false, screenAudio: false, callSessionId });
       return;
     }
     transaction.set(participantRef, participantData);
