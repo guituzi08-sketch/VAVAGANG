@@ -1,7 +1,7 @@
 import { ExternalLink, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const shopUrl = "https://www.fortnite.com/item-shop?lang=pt-BR";
+const shopUrl = "https://4nite.site/pt/loja-fortnite";
 
 export default function FortniteShopPage() {
   const [showFallback, setShowFallback] = useState(false);
