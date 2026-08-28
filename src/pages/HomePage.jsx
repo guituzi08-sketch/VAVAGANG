@@ -52,12 +52,12 @@ export default function HomePage() {
   }, [rooms, selectedRoomId]);
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   useEffect(() => {
-    if (!selectedRoom) {
+    if (!selectedRoom || (selectedRoom.ownerId !== firebaseUser?.uid && activeRoomId !== selectedRoom.id)) {
       setRoomMessages([]);
       return undefined;
     }
     return subscribeToRoomMessages(selectedRoom.id, setRoomMessages, (error) => setRoomError(getErrorMessage(error, "Não foi possível carregar as mensagens.")));
-  }, [selectedRoom?.id]);
+  }, [selectedRoom?.id, selectedRoom?.ownerId, firebaseUser?.uid, activeRoomId]);
 
   async function handleVoice(roomId) {
     setSelectedRoomId(roomId);

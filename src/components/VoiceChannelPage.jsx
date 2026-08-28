@@ -28,7 +28,7 @@ function VoiceChannelContent({ roomId }) {
   const navigate = useNavigate();
   const { openPrivateChat } = useDirectMessages();
   const { effects, error: soundError, audioBlocked, setAudioBlocked, trigger, upload, remove } = useSoundEffects(roomId);
-  const { participants, remoteStreams, remoteCameraStreams, remoteScreenStreams, cameraStream, screenStream, mediaError, roomClosed, roomClosedMessage, enterCall, exitCall, toggleAudio, startCamera, stopCamera, shareScreen, stopScreenShare, localStream, isConnecting, callState } = useCall();
+  const { participants, remoteStreams, remoteCameraStreams, remoteScreenStreams, cameraStream, screenStream, mediaError, roomClosed, roomClosedMessage, activeRoomId, enterCall, exitCall, toggleAudio, startCamera, stopCamera, shareScreen, stopScreenShare, localStream, isConnecting, callState } = useCall();
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -52,9 +52,12 @@ function VoiceChannelContent({ roomId }) {
     return subscribeToRoom(roomId, (room) => setRoomName(room?.name ?? ""), () => setRoomName(""));
   }, [roomId]);
   useEffect(() => {
-    if (!roomId) return undefined;
+    if (!roomId || activeRoomId !== roomId) {
+      setMessages([]);
+      return undefined;
+    }
     return subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(getErrorMessage(error, "Não foi possível carregar as mensagens da sala.")));
-  }, [roomId]);
+  }, [roomId, activeRoomId]);
   useEffect(() => {
     if (!roomClosed) return;
     window.alert(roomClosedMessage || "Esta sala foi encerrada pelo proprietário.");
