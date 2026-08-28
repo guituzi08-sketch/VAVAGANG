@@ -7,7 +7,6 @@ import { SocialProvider } from "./contexts/SocialContext";
 import { SoundEffectsProvider } from "./contexts/SoundEffectsContext";
 import { getErrorMessage } from "./utils/errorMessage";
 const AppShell = lazy(() => import("./components/AppShell"));
-const HomePage = lazy(() => import("./pages/HomePage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RoomPage = lazy(() => import("./pages/RoomPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -15,6 +14,7 @@ const WorkspacePage = lazy(() => import("./pages/WorkspacePage"));
 const MomentsPage = lazy(() => import("./pages/MomentsPage"));
 const VavagramPage = lazy(() => import("./pages/VavagramPage"));
 const VavaXPage = lazy(() => import("./pages/VavaXPage"));
+const FortniteShopPage = lazy(() => import("./pages/FortniteShopPage"));
 
 class AppErrorBoundary extends React.Component {
   state = { error: null };
@@ -63,7 +63,7 @@ export default function App() {
       <Route path="/login" element={firebaseUser ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route element={<AppShell />}>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<VavaXPage />} />
           <Route path="/friends" element={<WorkspacePage section="friends" />} />
           <Route path="/requests" element={<WorkspacePage section="requests" />} />
           <Route path="/messages" element={<WorkspacePage section="messages" />} />
@@ -71,8 +71,7 @@ export default function App() {
           <Route path="/moments" element={<MomentsPage />} />
           <Route path="/vavagram" element={<VavagramPage />} />
           <Route path="/vavax" element={<VavaXPage />} />
-          <Route path="/groups/:groupId" element={<WorkspacePage section="groups" />} />
-          <Route path="/groups" element={<WorkspacePage section="groups" />} />
+          <Route path="/fortnite" element={<FortniteShopPage />} />
           <Route path="/channels/:channelId" element={<WorkspacePage section="channels" />} />
           <Route path="/voice/:voiceId" element={<WorkspacePage section="voice" />} />
           <Route path="/settings" element={<SettingsPage />} />

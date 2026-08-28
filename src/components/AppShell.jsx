@@ -1,11 +1,9 @@
-import { AtSign, Bell, Camera, Compass, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Plus, Search, Send, Settings, UsersRound } from "lucide-react";
+import { AtSign, Bell, Camera, Flame, Home, LogOut, MessageSquare, Mic, MicOff, MoreHorizontal, Search, Send, Settings, ShoppingBag, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
-import { useSocial } from "../contexts/SocialContext";
-import { subscribeToRooms } from "../services/roomService";
 import ScreenShareViewer from "./ScreenShareViewer";
 
 const primaryNavigation = [
@@ -15,6 +13,7 @@ const primaryNavigation = [
   { to: "/requests", label: "Notificações", icon: Bell },
   { to: "/moments", label: "Moments", icon: Flame },
   { to: "/vavax", label: "VavaX", icon: AtSign },
+  { to: "/fortnite", label: "Loja Fortnite", icon: ShoppingBag },
   { to: "/settings", label: "Configurações", icon: Settings },
 ];
 
@@ -29,14 +28,11 @@ function RailButton({ label, icon: Icon, to }) {
 
 export default function AppShell() {
   const { profile, logout } = useAuth();
-  const [rooms, setRooms] = useState([]);
   const navigate = useNavigate();
   const { activeRoomId } = useCall();
-  const { groups } = useSocial();
   const { unreadCount, contact, messages, closePrivateChat, sendMessage, error: directMessageError } = useDirectMessages();
   const [directText, setDirectText] = useState("");
   const [isSendingDirectMessage, setSendingDirectMessage] = useState(false);
-  useEffect(() => subscribeToRooms(setRooms, () => {}), []);
   useEffect(() => {
     function handleShortcut(event) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -54,28 +50,21 @@ export default function AppShell() {
       <div className="rail-separator" />
       <RailButton label="Início" icon={Home} to="/" />
       <RailButton label="Amigos" icon={UsersRound} to="/friends" />
-      <RailButton label="Comunidades" icon={Compass} to="/groups" />
+      <RailButton label="Loja Fortnite" icon={ShoppingBag} to="/fortnite" />
       <div className="rail-spacer" />
       <RailButton label="Notificações" icon={Bell} to="/requests" />
       <RailButton label="Vavagram" icon={Camera} to="/vavagram" />
     </aside>
     <aside className="navigation-panel" aria-label="Navegação da seção">
       <div className="navigation-header"><strong>VAVAGANG</strong><NavLink className="icon-button" to="/search" title="Pesquisar"><Search size={16} /></NavLink></div>
-      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink><div className="nav-divider" /><div className="channel-heading"><span>Grupos</span><button className="nav-add" onClick={() => navigate("/groups")} title="Criar grupo"><Plus size={15} /></button></div>{groups.map((group) => <NavLink className="nav-item" to={`/groups/${group.id}`} key={group.id}><span>🔥</span><span>{group.name}</span></NavLink>)}{groups.length === 0 && <p className="navigation-empty">Crie um grupo para organizar canais.</p>}<div className="channel-heading"><span>Meu espaço</span><button className="nav-add" onClick={() => navigate("/")} title="Criar sala"><Plus size={15} /></button></div><NavLink className="nav-item" to="/"><MessageSquare size={17} /><span>Salas e chat</span></NavLink><span className="nav-caption">Voz</span>{rooms.map((room) => <NavLink className="nav-item voice-nav-item" to={`/voice/${room.id}`} key={room.id}><span className="voice-glyph">🔊</span><span>{room.name}</span><small>{room.participantCount ?? 0}</small></NavLink>)}{rooms.length === 0 && <p className="navigation-empty">Suas salas de voz aparecerão aqui.</p>}</nav>
+      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink></nav>
       <div className="navigation-footer"><div className="footer-user"><div className="avatar avatar-fallback">{profile?.displayName?.[0] ?? "V"}</div><div><strong>{profile?.displayName ?? "Usuário"}</strong><span>online no app</span></div></div><div className="footer-actions"><NavLink className="icon-button" to="/settings" title="Configurações"><Settings size={16} /></NavLink><button className="icon-button" onClick={logout} title="Sair"><LogOut size={16} /></button></div></div>
     </aside>
       <section className="workspace-main"><Outlet /></section>
-      <ContextPanel />
       {activeRoomId && <VoiceMiniPlayer onOpen={() => navigate(`/voice/${activeRoomId}`)} />}
       {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} isSending={isSendingDirectMessage} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); if (isSendingDirectMessage || !directText.trim()) return; setSendingDirectMessage(true); try { await sendMessage(directText); setDirectText(""); } catch (error) { console.error("[DirectMessage] falha ao enviar pela interface", error); } finally { setSendingDirectMessage(false); } }} />}
   </div>;
 }
-
-  function ContextPanel() {
-    const { profile } = useAuth();
-    const presenceLabel = profile?.presenceStatus === "offline" ? "offline" : "online";
-    return <aside className="context-panel" aria-label="Painel contextual"><div className="context-heading"><span>Seu espaço</span><span className="context-live">● {presenceLabel}</span></div><div className="context-profile"><div className="avatar avatar-fallback avatar-context">{profile?.displayName?.[0] ?? "V"}</div><strong>{profile?.displayName ?? "Usuário"}</strong><span>{profile?.email ?? ""}</span></div><div className="context-section"><span className="nav-caption">Presença no app</span><p>{presenceLabel === "online" ? "Sua sessão está ativa no aplicativo." : "Sua sessão está offline."}</p></div><div className="context-section"><span className="nav-caption">Atividade recente</span><p>Suas atividades aparecerão aqui quando você começar a usar o Vavagang.</p></div></aside>;
-  }
 
 function VoiceMiniPlayer({ onOpen }) {
   const { activeRoomId, participants, remoteScreenStreams, localStream, isConnecting, toggleAudio, exitCall } = useCall();
