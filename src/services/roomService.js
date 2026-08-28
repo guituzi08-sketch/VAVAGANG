@@ -29,12 +29,38 @@ export async function createRoom(name, user) {
 }
 
 export function subscribeToRooms(onChange, onError) {
-  return onSnapshot(
-    query(collection(db, "rooms"), orderBy("createdAt", "desc")),
-    (snapshot) =>
-      onChange(snapshot.docs.map((room) => ({ id: room.id, ...room.data() })).filter((room) => room.status !== "closed")),
-    onError,
-  );
+  const roomsById = new Map();
+  const activeCounts = new Map();
+  const participantUnsubscribers = new Map();
+  const emit = () => onChange([...roomsById.values()].map((room) => ({ ...room, participantCount: activeCounts.get(room.id) ?? 0 })));
+  const unsubscribeRooms = onSnapshot(query(collection(db, "rooms"), orderBy("createdAt", "desc")), (snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      const roomId = change.doc.id;
+      if (change.type === "removed" || change.doc.data().status === "closed") {
+        roomsById.delete(roomId);
+        activeCounts.delete(roomId);
+        participantUnsubscribers.get(roomId)?.();
+        participantUnsubscribers.delete(roomId);
+        return;
+      }
+      roomsById.set(roomId, { id: roomId, ...change.doc.data() });
+      if (!participantUnsubscribers.has(roomId)) {
+        participantUnsubscribers.set(roomId, subscribeToParticipants(roomId, (participants) => {
+          const now = Date.now();
+          activeCounts.set(roomId, participants.filter((participant) => {
+            const lastSeen = participant.lastSeen?.toMillis?.() ?? participant.lastSeen;
+            return typeof lastSeen === "number" && now - lastSeen <= 45_000;
+          }).length);
+          emit();
+        }, onError));
+      }
+    });
+    emit();
+  }, onError);
+  return () => {
+    unsubscribeRooms();
+    participantUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
 }
 
 export function subscribeToRoom(roomId, onChange, onError) {

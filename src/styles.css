@@ -525,3 +525,87 @@ body::after { opacity: .018; background: repeating-linear-gradient(0deg, transpa
 .private-chat-error { max-width: 100%; margin: 0; color: var(--danger); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 
 @media (max-width: 800px) { .home-intro { clip-path: polygon(0 14px, 14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px)); } .home-arena { right: 0; bottom: -40px; } }
+
+/* Neon violet production theme */
+:root {
+	--bg: #050407;
+	--panel: #0b0910;
+	--panel-raised: #14101b;
+	--line: #241936;
+	--line-bright: #513577;
+	--muted: #9b8cae;
+	--blue: #bd5cff;
+	--blue-bright: #e2b8ff;
+	--violet: #bd5cff;
+	--mint: #d879ff;
+	--danger: #ff5c9a;
+	--shadow: 0 24px 80px #000c;
+	--ease: 180ms cubic-bezier(.22, 1, .36, 1);
+}
+
+body {
+	color: #f8f1ff;
+	background: #050407;
+	background-image: linear-gradient(#bd5cff09 1px, transparent 1px), linear-gradient(90deg, #bd5cff09 1px, transparent 1px), radial-gradient(700px 420px at 82% -8%, #781bb52b, transparent 64%), radial-gradient(520px 360px at 0 100%, #260d402b, transparent 70%);
+	background-size: 44px 44px, 44px 44px, auto, auto;
+}
+
+body::before { opacity: .14; background-image: linear-gradient(135deg, #bd5cff0b 12%, transparent 12.5%, transparent 50%, #bd5cff0b 50.5%, #bd5cff0b 62%, transparent 62.5%); background-size: 38px 38px; }
+body::after { opacity: .025; background: repeating-linear-gradient(0deg, transparent 0 4px, #fff 5px); }
+.topbar, .room-topbar, .navigation-header, .settings-topbar, .vavagram-topbar, .dashboard-header { background: #09070de8; border-color: #2e1c46; box-shadow: 0 12px 35px #0009; backdrop-filter: blur(18px); }
+.eyebrow, .section-label, .number, .brand-mark svg, .dashboard-channel-title svg { color: var(--blue); text-shadow: 0 0 12px #bd5cff88; }
+.muted { color: #a998b8; }
+.primary-button, .join-button { color: #fff; background: linear-gradient(135deg, #d66aff, #7620a8); border: 1px solid #e8b8ff66; box-shadow: 0 8px 25px #9f39d333; }
+.primary-button:hover, .join-button:hover { background: linear-gradient(135deg, #eb9bff, #a636d4); box-shadow: 0 0 28px #bd5cff88; }
+.secondary-button { color: #ddc7ed; border-color: #513577; background: #120d18; }
+.secondary-button:hover, .icon-button:hover, .settings-close:hover { color: #fff; border-color: var(--blue); background: #25143a; box-shadow: 0 0 18px #bd5cff3b; }
+.icon-button, .settings-close { border-color: #3b2854; background: #0c0911; }
+.workspace-shell { background: #060508; }
+.community-rail { background: linear-gradient(180deg, #09070d, #100719); border-color: #2e1c46; }
+.rail-logo { color: #fff; background: linear-gradient(145deg, #e08bff, #6d1e9c); border-color: #e8b8ff; box-shadow: 0 0 28px #bd5cff77; }
+.rail-button:hover, .rail-button.active, .rail-logo:hover { color: #fff; border-color: var(--blue); background: #25123a; box-shadow: 0 0 22px #bd5cff55; }
+.navigation-panel, .context-panel { background: #0b0910f2; border-color: #2e1c46; }
+.nav-item:hover { color: #fff; background: #1b1028; }
+.nav-item.active { color: #f4dcff; border-color: #bd5cff66; background: linear-gradient(90deg, #32104b, #140d1e); box-shadow: inset 3px 0 var(--blue), 0 0 18px #bd5cff22; }
+.nav-item:hover svg, .nav-item.active svg { color: var(--blue-bright); filter: drop-shadow(0 0 6px #bd5cff); }
+.footer-user span, .context-live, .chat-live { color: #df8bff; }
+.workspace-page, .social-workspace, .voice-channel-page, .settings-page, .vavagram-page, .vavax-page, .moments-page, .vava-dashboard { background: transparent; }
+.home-intro, .hub-overview, .voice-roster, .room-chat, .workspace-empty, .person-row, .notification-row, .conversation-row, .search-result, .group-card, .group-channel-list, .group-overview, .setting-card, .vavagram-profile-card, .story-strip, .vavagram-post, .vavax-profile, .vavax-post, .vavax-empty, .sound-effects-panel, .voice-card, .sound-card, .track-card, .available-rooms { border-color: #3c2257; background: linear-gradient(135deg, #160d1e, #09070d); box-shadow: 0 18px 55px #0008; }
+.home-intro h1, .workspace-page-header h1, .social-header h1, .voice-channel-header h1, .moments-header h1 { text-shadow: 0 0 34px #bd5cff33; }
+.home-intro h1 em, em { color: #d990ff; text-shadow: 0 0 20px #bd5cffaa; }
+.home-intro::after, .hub-overview::before { background: linear-gradient(90deg, transparent, #bd5cff, #f09aff, transparent); box-shadow: 0 0 18px #bd5cff; }
+.hub-panel:hover, .person-row:hover, .conversation-row:hover, .group-card:hover, .voice-participant:hover, .moment-card:hover { border-color: var(--blue); background: #21102f; box-shadow: 0 0 26px #bd5cff24; }
+.room-row:hover { border-color: var(--blue); background: #24102f; box-shadow: -8px 12px 0 #3e145a, 0 0 26px #bd5cff33; }
+.room-icon, .empty-icon, .group-card-icon, .welcome-mark { color: var(--blue-bright); border-color: #bd5cff99; background: #bd5cff1b; box-shadow: inset 0 0 18px #bd5cff1c; }
+.social-search, .global-search-large, .vavagram-search, .modal-input, .dashboard-search, .dashboard-create-room input { border-color: #4a2b66; background: #0b0810; }
+.social-search:focus-within, .global-search-large:focus-within, .vavagram-search:focus-within, .modal-input:focus, .dashboard-search:focus-within, .dashboard-create-room input:focus { border-color: var(--blue); box-shadow: 0 0 18px #bd5cff30; }
+.voice-channel-state, .screen-share-label, .voice-section-title svg, .voice-section-title b, .moment-type, .moments-heading > div { color: var(--blue-bright); }
+.live-dot, .pulse-dot, .presence-dot, .moment-live-dot { background: #d875ff; box-shadow: 0 0 0 4px #bd5cff2e, 0 0 16px #bd5cffcc; }
+.control-button:hover, .control-button.active { border-color: var(--blue); background: #28133d; box-shadow: 0 0 20px #bd5cff55; }
+.control-button.off, .voice-mini-actions .is-muted, .voice-mini-actions .voice-leave { color: var(--danger); border-color: var(--danger); }
+.private-chat-overlay { border-color: #bd5cffaa; background: #10091af7; box-shadow: 0 26px 90px #000, 0 0 38px #bd5cff33; }
+.private-message.outgoing { background: linear-gradient(135deg, #c958ee, #692092); }
+.screen-share-viewer { border-color: var(--blue); box-shadow: 0 0 25px #bd5cff44; }
+.sound-effect-button { border-color: color-mix(in srgb, var(--pad-accent) 70%, #3c2257); }
+.dashboard-header, .dashboard-widgets, .dashboard-members { background: #0b080f; border-color: #321d49; }
+.dashboard-channel-title svg, .dashboard-icon:hover, .dashboard-widget-link, .track-art-icon, .dashboard-composer .composer-send { color: var(--blue-bright); }
+.dashboard-welcome, .dashboard-composer, .dashboard-create-room input { border-color: #40245d; background: #100a16; }
+.voice-card, .sound-card, .track-card, .available-rooms { border-color: #4c2869; background: linear-gradient(145deg, #1b0d27, #0e0814); }
+.voice-tile { border-color: #4b2a68; background: #120a1a; }.voice-tile:hover, .available-rooms > button:hover { border-color: var(--blue); background: #251236; }
+.connected, .moment-live-dot, .moment-signal { color: #e28cff; }
+.dashboard-avatar-fallback, .avatar-fallback { color: #1a0924; background: linear-gradient(145deg, #e08bff, #9d38cd); }
+.vavax-status, .vavax-brand > span { color: var(--blue-bright); }.vavax-brand > span { background: #bd5cff22; border-color: #bd5cff88; }
+.settings-nav-item.active { color: #efcfff; border-color: #bd5cff66; background: #29123d; }
+.settings-select:focus, .settings-field input:focus, .settings-field textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #bd5cff22; }
+.settings-error, .error-message { color: #ff7eaf; }
+
+@media (max-width: 800px) {
+	.dashboard-header { background: #09070de8; }
+	.dashboard-mobile-nav { background: #100817f5; border-color: #4b2869; }
+	.dashboard-mobile-nav a:hover, .dashboard-mobile-nav button:hover { color: var(--blue-bright); }
+	.voice-mini-player { border-color: #bd5cff99; background: #160d20f5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

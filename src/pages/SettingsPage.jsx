@@ -242,7 +242,7 @@ function TextField({
         type={type}
         value={value ?? ""}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
+            onChange={disabled ? undefined : (event) => onChange(event.target.value)}
       />
     </label>
   );
@@ -313,7 +313,6 @@ function AccountSettings({ profile, firebaseUser, refreshProfile }) {
             <TextField
               label="E-mail"
               value={firebaseUser?.email}
-              onChange={() => {}}
               disabled
             />
             <TextField label="Status" value={status} onChange={setStatus} />
