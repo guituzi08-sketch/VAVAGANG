@@ -41,7 +41,7 @@ export default function HomePage() {
   const [roomError, setRoomError] = useState("");
   const navigate = useNavigate();
 
-  useEffect(() => subscribeToRooms(setRooms, setRoomError), []);
+  useEffect(() => subscribeToRooms(setRooms, (error) => setRoomError(error?.message || "Não foi possível carregar as salas.")), []);
   const selectedRoom = rooms[0];
   useEffect(() => {
     if (!selectedRoom) {
