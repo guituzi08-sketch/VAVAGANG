@@ -23,6 +23,7 @@ export async function createRoom(name, user) {
     createdBy: user.uid,
     createdByName: user.displayName ?? user.email ?? "Jogador",
     createdAt: serverTimestamp(),
+    status: "open",
     participantCount: 0,
   });
   return roomRef.id;

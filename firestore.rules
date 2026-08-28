@@ -12,6 +12,11 @@ service cloud.firestore {
           || exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)));
     }
 
+    function roomIsOpen(roomId) {
+      return !('status' in get(/databases/$(database)/documents/rooms/$(roomId)).data)
+        || get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
+    }
+
     function peerKey(firstUid, secondUid) {
       return firstUid < secondUid
         ? firstUid + '::' + secondUid
@@ -214,7 +219,7 @@ service cloud.firestore {
         allow create, update: if signedIn()
           && participantId == request.auth.uid
           && request.resource.data.uid == request.auth.uid
-          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
+          && roomIsOpen(roomId);
         allow delete: if signedIn() && (participantId == request.auth.uid || resource.data.uid == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.createdBy == request.auth.uid);
       }
 
@@ -227,7 +232,7 @@ service cloud.firestore {
           && request.resource.data.sessionId != null
           && exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.to))
           && get(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)).data.callSessionId == request.resource.data.callSessionId
-          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
+          && roomIsOpen(roomId);
         allow delete: if signedIn() && (resource.data.from == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.createdBy == request.auth.uid);
       }
 
@@ -240,7 +245,7 @@ service cloud.firestore {
           && request.resource.data.sessionId != null
           && exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.resource.data.to))
           && get(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid)).data.callSessionId == request.resource.data.callSessionId
-          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
+          && roomIsOpen(roomId);
         allow delete: if signedIn() && (resource.data.from == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.createdBy == request.auth.uid);
       }
 
@@ -248,7 +253,7 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn()
           && request.resource.data.uid == request.auth.uid
-          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
+          && roomIsOpen(roomId);
         allow delete: if signedIn() && (resource.data.uid == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.createdBy == request.auth.uid);
         allow update: if false;
       }
@@ -258,7 +263,7 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.resource.data.authorId == request.auth.uid
           && canAccessRoom(roomId)
-          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
+          && roomIsOpen(roomId);
         allow delete: if signedIn() && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid);
         allow update: if false;
       }
