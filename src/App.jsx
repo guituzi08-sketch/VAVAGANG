@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import React from "react";
 import { useAuth } from "./contexts/AuthContext";
 import { CallProvider } from "./contexts/CallContext";
 import { DirectMessageProvider } from "./contexts/DirectMessageContext";
@@ -13,6 +14,27 @@ import WorkspacePage from "./pages/WorkspacePage";
 import MomentsPage from "./pages/MomentsPage";
 import VavagramPage from "./pages/VavagramPage";
 import VavaXPage from "./pages/VavaXPage";
+
+class AppErrorBoundary extends React.Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="runtime-error-screen">
+        <p className="eyebrow">VAVAGANG // erro de inicialização</p>
+        <h1>Não foi possível carregar esta tela.</h1>
+        <p>Atualize a página. Se o problema continuar, copie esta mensagem para o suporte:</p>
+        <code>{this.state.error.message || "Erro desconhecido"}</code>
+        <button className="primary-button" onClick={() => window.location.reload()}>Recarregar aplicação</button>
+      </main>
+    );
+  }
+}
 
 function LoadingScreen() {
   return <main className="loading-screen"><span className="pulse-dot" />Conectando ao Vavagang</main>;
@@ -30,7 +52,8 @@ export default function App() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <Routes>
+    <AppErrorBoundary>
+      <Routes>
       <Route path="/login" element={firebaseUser ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route element={<AppShell />}>
@@ -51,6 +74,7 @@ export default function App() {
         </Route>
       </Route>
       <Route path="*" element={<Navigate to={firebaseUser ? "/" : "/login"} replace />} />
-    </Routes>
+      </Routes>
+    </AppErrorBoundary>
   );
 }
