@@ -14,11 +14,9 @@ const missingEnvironmentVariables = requiredEnvironmentVariables.filter(
   (variableName) => !import.meta.env[variableName],
 );
 
-if (missingEnvironmentVariables.length > 0) {
-  throw new Error(
-    `Variáveis Firebase ausentes: ${missingEnvironmentVariables.join(", ")}`,
-  );
-}
+export const firebaseConfigurationError = missingEnvironmentVariables.length > 0
+  ? `Configure as variáveis Firebase ausentes: ${missingEnvironmentVariables.join(", ")}.`
+  : "";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -38,11 +36,11 @@ if (existingApp && (existingApp.options.projectId !== "vava-post" || existingApp
   throw new Error("Existe uma instância Firebase incompatível.");
 }
 
-export const app = existingApp ?? initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+export const app = existingApp ?? (firebaseConfigurationError ? null : initializeApp(firebaseConfig));
+export const auth = app ? getAuth(app) : null;
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+export const db = app ? getFirestore(app) : null;
 
 export function firebaseHealthCheck() {
-  return { initialized: Boolean(app), authAvailable: Boolean(auth), firestoreAvailable: Boolean(db), projectId: app.options.projectId, expectedProjectId: "vava-post", configuredCorrectly: app.options.projectId === "vava-post" };
+  return { initialized: Boolean(app), authAvailable: Boolean(auth), firestoreAvailable: Boolean(db), projectId: app?.options.projectId ?? null, expectedProjectId: "vava-post", configuredCorrectly: Boolean(app) && app.options.projectId === "vava-post", configurationError: firebaseConfigurationError };
 }

@@ -23,6 +23,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { createRoom, sendRoomMessage, subscribeToRoomMessages, subscribeToRooms } from "../services/roomService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 function Avatar({ image, profile, size = "normal" }) {
   if (profile?.photoURL) return <img className={`dashboard-avatar ${size}`} src={profile.photoURL} alt="" />;
@@ -33,6 +34,7 @@ export default function HomePage() {
   const { firebaseUser, profile } = useAuth();
   const { enterCall, activeRoomId, participants, toggleAudio, shareScreen } = useCall();
   const [rooms, setRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [roomMessages, setRoomMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [newRoomName, setNewRoomName] = useState("");
@@ -41,17 +43,21 @@ export default function HomePage() {
   const [roomError, setRoomError] = useState("");
   const navigate = useNavigate();
 
-  useEffect(() => subscribeToRooms(setRooms, (error) => setRoomError(error?.message || "Não foi possível carregar as salas.")), []);
-  const selectedRoom = rooms[0];
+  useEffect(() => subscribeToRooms(setRooms, (error) => setRoomError(getErrorMessage(error, "Não foi possível carregar as salas."))), []);
+  useEffect(() => {
+    if (!rooms.some((room) => room.id === selectedRoomId)) setSelectedRoomId(rooms[0]?.id ?? null);
+  }, [rooms, selectedRoomId]);
+  const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   useEffect(() => {
     if (!selectedRoom) {
       setRoomMessages([]);
       return undefined;
     }
-    return subscribeToRoomMessages(selectedRoom.id, setRoomMessages, setRoomError);
+    return subscribeToRoomMessages(selectedRoom.id, setRoomMessages, (error) => setRoomError(getErrorMessage(error, "Não foi possível carregar as mensagens.")));
   }, [selectedRoom?.id]);
 
   async function handleVoice(roomId) {
+    setSelectedRoomId(roomId);
     await enterCall(roomId);
     navigate(`/voice/${roomId}`);
   }
@@ -68,7 +74,7 @@ export default function HomePage() {
       setMessage("");
       setRoomError("");
     } catch (error) {
-      setRoomError(error.message);
+      setRoomError(getErrorMessage(error, "Não foi possível enviar a mensagem."));
     }
   }
 
@@ -81,7 +87,7 @@ export default function HomePage() {
       setNewRoomName("");
       navigate(`/voice/${roomId}`);
     } catch (error) {
-      setRoomError(error.message);
+      setRoomError(getErrorMessage(error, "Não foi possível criar a sala."));
     } finally {
       setIsCreatingRoom(false);
     }
@@ -110,7 +116,7 @@ export default function HomePage() {
           <section className="voice-card"><div className="widget-header"><div><strong>{selectedRoom?.name ?? "Nenhuma sala ativa"}</strong><span className="connected"><i /> {selectedRoom ? `${selectedRoom.participantCount ?? 0} participante(s)` : "offline"}</span></div><div className="widget-tools"><Volume2 size={17} /><MoreHorizontal size={18} /></div></div><div className="voice-grid">{participants.length === 0 && <div className="dashboard-empty">Entre em uma sala para ver participantes.</div>}{participants.map((member) => <div className="voice-tile" key={member.uid}><Avatar profile={member} /><span>{member.displayName}</span></div>)}{selectedRoom && <button className="voice-tile invite-tile" onClick={() => handleVoice(selectedRoom.id)}><Plus size={23} /><span>Entrar</span></button>}</div><div className="voice-controls"><button title="Abrir câmera e voz" onClick={() => selectedRoom && handleVoice(selectedRoom.id)} disabled={!selectedRoom}><Gamepad2 size={18} /></button><button title="Compartilhar tela na sala" onClick={async () => { if (!activeRoomId && selectedRoom) await handleVoice(selectedRoom.id); await shareScreen(); }} disabled={!selectedRoom}><Share2 size={18} /></button><button title={muted ? "Ativar microfone" : "Silenciar microfone"} onClick={handleMute} className={muted ? "is-muted" : ""} disabled={!activeRoomId}>{muted ? <MicOff size={18} /> : <Mic size={18} />}</button><button className="hangup" title="Abrir sala" onClick={() => selectedRoom && handleVoice(selectedRoom.id)} disabled={!selectedRoom}><Headphones size={18} /></button></div></section>
           <section className="sound-card"><div className="widget-heading"><div><Sparkles size={17} /><strong>VAVASOUND</strong></div><NavLink to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"} title="Abrir efeitos sonoros"><MoreHorizontal size={17} /></NavLink></div><p>Abra uma sala para carregar os efeitos compartilhados.</p><NavLink className="dashboard-widget-link" to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"}>{selectedRoom ? "Abrir efeitos da sala" : "Nenhuma sala disponível"}</NavLink></section>
           <section className="track-card"><div><div className="track-brand"><span>♫</span><strong>ÁUDIO DA SALA</strong></div><h2>Controles de voz</h2><p>Câmera, microfone, tela e efeitos ficam disponíveis dentro da sala.</p><NavLink className="dashboard-widget-link" to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"}>{selectedRoom ? "Abrir sala" : "Ver salas"}</NavLink></div><Headphones className="track-art-icon" size={38} /></section>
-          {rooms.length > 0 && <section className="available-rooms"><div className="widget-heading"><strong>Salas disponíveis</strong><span>{rooms.length}</span></div>{rooms.slice(0, 3).map((room) => <button key={room.id} onClick={() => handleVoice(room.id)}><Volume2 size={15} /><span>{room.name}</span><small>{room.participantCount ?? 0}</small></button>)}</section>}
+          {rooms.length > 0 && <section className="available-rooms"><div className="widget-heading"><strong>Salas disponíveis</strong><span>{rooms.length}</span></div>{rooms.slice(0, 3).map((room) => <button className={room.id === selectedRoomId ? "active" : ""} key={room.id} onClick={() => handleVoice(room.id)}><Volume2 size={15} /><span>{room.name}</span><small>{room.participantCount ?? 0}</small></button>)}</section>}
         </aside>
       </div>
 

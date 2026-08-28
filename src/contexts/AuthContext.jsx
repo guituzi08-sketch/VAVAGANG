@@ -1,7 +1,8 @@
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth, googleProvider } from "../firebase";
+import { auth, firebaseConfigurationError, googleProvider } from "../firebase";
 import { setUserPresence, syncUserProfile, updateUserProfile } from "../services/userService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 const AuthContext = createContext(null);
 
@@ -12,6 +13,11 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!auth) {
+      setError(firebaseConfigurationError);
+      setLoading(false);
+      return undefined;
+    }
     return onAuthStateChanged(
       auth,
       async (user) => {
@@ -26,7 +32,7 @@ export function AuthProvider({ children }) {
           setProfile(await syncUserProfile(user));
           await setUserPresence(user.uid, "online");
         } catch (profileError) {
-          setError(profileError.message);
+          setError(getErrorMessage(profileError, "Não foi possível carregar seu perfil."));
         } finally {
           setLoading(false);
         }
@@ -35,7 +41,7 @@ export function AuthProvider({ children }) {
         setError(
           authError.code === "auth/unauthorized-domain"
             ? "Este domínio não está autorizado no Firebase Authentication."
-            : authError.message,
+            : getErrorMessage(authError, "Não foi possível verificar sua sessão."),
         );
         setLoading(false);
       },
@@ -44,6 +50,10 @@ export function AuthProvider({ children }) {
 
   async function loginWithGoogle() {
     setError("");
+    if (!auth) {
+      setError(firebaseConfigurationError);
+      return null;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (loginError) {
@@ -52,7 +62,7 @@ export function AuthProvider({ children }) {
           ? ""
           : loginError.code === "auth/unauthorized-domain"
             ? "Este domínio não está autorizado no Firebase Authentication."
-            : loginError.message,
+            : getErrorMessage(loginError, "Não foi possível entrar com o Google."),
       );
       return null;
     }
@@ -60,6 +70,10 @@ export function AuthProvider({ children }) {
 
   async function loginWithEmail(email, password) {
     setError("");
+    if (!auth) {
+      setError(firebaseConfigurationError);
+      return null;
+    }
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
     } catch (loginError) {
@@ -70,6 +84,10 @@ export function AuthProvider({ children }) {
 
   async function registerWithEmail(email, password) {
     setError("");
+    if (!auth) {
+      setError(firebaseConfigurationError);
+      return null;
+    }
     try {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
     } catch (registerError) {
@@ -79,8 +97,12 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
-    if (firebaseUser) await setUserPresence(firebaseUser.uid, "offline");
-    await signOut(auth);
+    if (!auth) return;
+    try {
+      if (firebaseUser) await setUserPresence(firebaseUser.uid, "offline");
+    } finally {
+      await signOut(auth);
+    }
   }
 
   async function refreshProfile(profileChanges) {

@@ -11,6 +11,8 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -116,6 +118,18 @@ export async function createVavaXNotification(recipientId, user, type, metadata)
     read: false,
     createdAt: serverTimestamp(),
   });
+}
+
+export function subscribeToVavaXNotifications(userId, onChange, onError) {
+  return onSnapshot(
+    query(collection(db, "vavaxNotifications"), where("recipientId", "==", userId), orderBy("createdAt", "desc")),
+    (snapshot) => onChange(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+    onError,
+  );
+}
+
+export async function markVavaXNotificationRead(notificationId) {
+  await updateDoc(doc(db, "vavaxNotifications", notificationId), { read: true });
 }
 
 export async function deleteVavaXPost(postId) {

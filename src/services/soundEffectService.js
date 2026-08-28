@@ -1,9 +1,14 @@
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { supabase } from "../supabase";
+import { supabase, supabaseConfigurationError } from "../supabase";
 
 const BUCKET = "sound-effects";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+function requireSupabase() {
+  if (!supabase) throw new Error(supabaseConfigurationError);
+  return supabase;
+}
 
 function getSafeFileName(fileName) {
   return fileName.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
@@ -38,14 +43,15 @@ export function subscribeToSoundEffectEvents(roomId, onChange, onError) {
 }
 
 export async function uploadSoundEffect(roomId, user, file, name) {
+  const client = requireSupabase();
   if (!file || !["audio/mpeg", "audio/wav", "audio/wave", "audio/x-wav"].includes(file.type)) {
     throw new Error("Escolha um arquivo MP3 ou WAV.");
   }
   if (file.size > MAX_FILE_SIZE) throw new Error("O efeito deve ter no máximo 10 MB.");
   const storagePath = `global/${user.uid}/${crypto.randomUUID()}-${getSafeFileName(file.name)}`;
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, file, { contentType: file.type, upsert: false });
+  const { error: uploadError } = await client.storage.from(BUCKET).upload(storagePath, file, { contentType: file.type, upsert: false });
   if (uploadError) throw uploadError;
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+  const { data } = client.storage.from(BUCKET).getPublicUrl(storagePath);
   try {
     const effect = await addDoc(collection(db, "soundEffects"), {
       name: name.trim() || file.name.replace(/\.[^/.]+$/, ""),
@@ -58,7 +64,7 @@ export async function uploadSoundEffect(roomId, user, file, name) {
     });
     return effect.id;
   } catch (error) {
-    await supabase.storage.from(BUCKET).remove([storagePath]);
+    await client.storage.from(BUCKET).remove([storagePath]);
     throw error;
   }
 }
@@ -72,7 +78,8 @@ export async function triggerSoundEffect(roomId, user, effectId) {
 }
 
 export async function removeSoundEffect(roomId, effect) {
-  const { error } = await supabase.storage.from(BUCKET).remove([effect.storagePath]);
+  const client = requireSupabase();
+  const { error } = await client.storage.from(BUCKET).remove([effect.storagePath]);
   if (error) throw error;
   await deleteDoc(doc(db, "soundEffects", effect.id));
 }

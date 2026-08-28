@@ -3,6 +3,7 @@ import { useAuth } from "./AuthContext";
 import { acceptFriendRequest, blockUser as blockFirestoreUser, createFriendRequest, isBlocked, rejectFriendRequest, removeFriend, subscribeToBlocks, subscribeToFriendRequests, subscribeToFriends, unblockUser as unblockFirestoreUser } from "../services/friendService";
 import { markAllNotificationsRead as markAllFirestoreNotificationsRead, markNotificationRead as markFirestoreNotificationRead, subscribeToNotifications } from "../services/notificationService";
 import { createChannel as createFirestoreChannel, createGroup as createFirestoreGroup, deleteChannel as deleteFirestoreChannel, deleteGroup as deleteFirestoreGroup, deleteChannelMessage as deleteFirestoreChannelMessage, editChannelMessage as editFirestoreChannelMessage, inviteToGroup, respondToGroupInvite, sendChannelMessage as sendFirestoreChannelMessage, subscribeToChannelMessages, subscribeToGroupChannels, subscribeToGroupInvites, subscribeToGroups, updateGroup as updateFirestoreGroup } from "../services/communityService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 const SocialContext = createContext(null);
 
@@ -18,21 +19,21 @@ export function SocialProvider({ children }) {
 
   useEffect(() => {
     if (!firebaseUser) return undefined;
-    return subscribeToGroups(firebaseUser.uid, setGroups, (snapshotError) => setError(snapshotError.message));
+    return subscribeToGroups(firebaseUser.uid, setGroups, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar os grupos.")));
   }, [firebaseUser]);
 
   useEffect(() => {
     if (!firebaseUser) return undefined;
-    const unsubscribeBlocks = subscribeToBlocks(firebaseUser.uid, setBlocked, (snapshotError) => setError(snapshotError.message));
-    const unsubscribeNotifications = subscribeToNotifications(firebaseUser.uid, setNotifications, (snapshotError) => setError(snapshotError.message));
-    const unsubscribeInvites = subscribeToGroupInvites(firebaseUser.uid, setInvites, (snapshotError) => setError(snapshotError.message));
+    const unsubscribeBlocks = subscribeToBlocks(firebaseUser.uid, setBlocked, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar os bloqueios.")));
+    const unsubscribeNotifications = subscribeToNotifications(firebaseUser.uid, setNotifications, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar as notificações.")));
+    const unsubscribeInvites = subscribeToGroupInvites(firebaseUser.uid, setInvites, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar os convites.")));
     return () => { unsubscribeBlocks(); unsubscribeNotifications(); unsubscribeInvites(); };
   }, [firebaseUser]);
 
   useEffect(() => {
     if (!firebaseUser) return undefined;
-    const unsubscribeFriends = subscribeToFriends(firebaseUser.uid, setFriends, (snapshotError) => setError(snapshotError.message));
-    const unsubscribeRequests = subscribeToFriendRequests(firebaseUser.uid, setRequests, (snapshotError) => setError(snapshotError.message));
+    const unsubscribeFriends = subscribeToFriends(firebaseUser.uid, setFriends, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar os amigos.")));
+    const unsubscribeRequests = subscribeToFriendRequests(firebaseUser.uid, setRequests, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar as solicitações.")));
     return () => { unsubscribeFriends(); unsubscribeRequests(); };
   }, [firebaseUser]);
 
@@ -40,8 +41,8 @@ export function SocialProvider({ children }) {
     const unsubscribers = [];
     groups.forEach((group) => {
       unsubscribers.push(subscribeToGroupChannels(group.id, (channels) => {
-        setGroups((current) => current.map((item) => item.id === group.id ? { ...item, channels } : item));
-      }, (snapshotError) => setError(snapshotError.message)));
+        setGroups((current) => current.map((item) => item.id === group.id ? { ...item, channels: channels ?? [] } : item));
+      }, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar os canais."))));
     });
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [groups.map((group) => group.id).join(",")]);
@@ -50,8 +51,8 @@ export function SocialProvider({ children }) {
     const unsubscribers = [];
     groups.forEach((group) => (group.channels ?? []).forEach((channel) => {
       unsubscribers.push(subscribeToChannelMessages(group.id, channel.id, (messages) => {
-        setGroups((current) => current.map((item) => item.id === group.id ? { ...item, channels: item.channels.map((entry) => entry.id === channel.id ? { ...entry, messages } : entry) } : item));
-      }, (snapshotError) => setError(snapshotError.message)));
+        setGroups((current) => current.map((item) => item.id === group.id ? { ...item, channels: (item.channels ?? []).map((entry) => entry.id === channel.id ? { ...entry, messages: messages ?? [] } : entry) } : item));
+      }, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar as mensagens do canal."))));
     }));
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [groups.map((group) => `${group.id}:${(group.channels ?? []).map((channel) => channel.id).join("|")}`).join(",")]);

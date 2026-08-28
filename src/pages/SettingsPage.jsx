@@ -17,6 +17,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { updateUserProfile } from "../services/userService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 const categories = [
   { id: "account", label: "Minha conta", icon: UserRound },
@@ -42,6 +43,7 @@ const defaults = {
   enterSends: true,
   linkPreviews: true,
   autoMedia: true,
+  language: "Português (Brasil)",
   animations: "Todas",
   density: "Normal",
   scale: "Normal",
@@ -85,7 +87,7 @@ export default function SettingsPage() {
       localStorage.setItem("vavagang:settings", JSON.stringify(settings));
       setSaved(true);
     } catch (error) {
-      setSaveError(error.message);
+      setSaveError(getErrorMessage(error, "Não foi possível salvar as configurações."));
     } finally {
       setSaving(false);
     }
@@ -607,14 +609,14 @@ function VoiceSettings({ settings, updateSetting }) {
       setError("Seu navegador não oferece detecção de dispositivos de mídia.");
       return;
     }
-    const list = await navigator.mediaDevices.enumerateDevices();
-    setDevices(list);
-    setSelectedMic(
-      list.find((device) => device.kind === "audioinput")?.deviceId ?? "",
-    );
-    setSelectedCamera(
-      list.find((device) => device.kind === "videoinput")?.deviceId ?? "",
-    );
+    try {
+      const list = await navigator.mediaDevices.enumerateDevices();
+      setDevices(list);
+      setSelectedMic(list.find((device) => device.kind === "audioinput")?.deviceId ?? "");
+      setSelectedCamera(list.find((device) => device.kind === "videoinput")?.deviceId ?? "");
+    } catch (mediaError) {
+      setError(getErrorMessage(mediaError, "Não foi possível detectar seus dispositivos."));
+    }
   }
   async function testMicrophone() {
     setError("");
@@ -798,12 +800,12 @@ function AdvancedSettings({ settings, updateSetting }) {
       </SettingCard>
       <SettingCard
         title="Idioma"
-        description="A interface atual está em português do Brasil."
+        description="Escolha o idioma salvo para sua próxima sessão."
       >
         <Choice
-          value="Português (Brasil)"
+          value={settings.language}
           options={["Português (Brasil)", "English", "Español"]}
-          onChange={() => {}}
+          onChange={(value) => updateSetting("language", value)}
         />
       </SettingCard>
       <SettingCard
@@ -812,7 +814,11 @@ function AdvancedSettings({ settings, updateSetting }) {
       >
         <button
           className="secondary-button"
-          onClick={() => localStorage.removeItem("vavagang:settings")}
+          onClick={() => {
+            localStorage.removeItem("vavagang:settings");
+            setSettings(defaults);
+            setSaved(false);
+          }}
         >
           Limpar preferências locais
         </button>

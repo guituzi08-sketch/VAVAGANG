@@ -1,19 +1,20 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { useAuth } from "./contexts/AuthContext";
 import { CallProvider } from "./contexts/CallContext";
 import { DirectMessageProvider } from "./contexts/DirectMessageContext";
 import { SocialProvider } from "./contexts/SocialContext";
 import { SoundEffectsProvider } from "./contexts/SoundEffectsContext";
-import AppShell from "./components/AppShell";
-import HomePage from "./pages/HomePage";
-import LoginPage from "./pages/LoginPage";
-import RoomPage from "./pages/RoomPage";
-import SettingsPage from "./pages/SettingsPage";
-import WorkspacePage from "./pages/WorkspacePage";
-import MomentsPage from "./pages/MomentsPage";
-import VavagramPage from "./pages/VavagramPage";
-import VavaXPage from "./pages/VavaXPage";
+import { getErrorMessage } from "./utils/errorMessage";
+const AppShell = lazy(() => import("./components/AppShell"));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RoomPage = lazy(() => import("./pages/RoomPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const WorkspacePage = lazy(() => import("./pages/WorkspacePage"));
+const MomentsPage = lazy(() => import("./pages/MomentsPage"));
+const VavagramPage = lazy(() => import("./pages/VavagramPage"));
+const VavaXPage = lazy(() => import("./pages/VavaXPage"));
 
 class AppErrorBoundary extends React.Component {
   state = { error: null };
@@ -29,7 +30,7 @@ class AppErrorBoundary extends React.Component {
         <p className="eyebrow">VAVAGANG // erro de inicialização</p>
         <h1>Não foi possível carregar esta tela.</h1>
         <p>Atualize a página. Se o problema continuar, copie esta mensagem para o suporte:</p>
-        <code>{this.state.error.message || "Erro desconhecido"}</code>
+        <code>{getErrorMessage(this.state.error)}</code>
         <button className="primary-button" onClick={() => window.location.reload()}>Recarregar aplicação</button>
       </main>
     );
@@ -47,13 +48,18 @@ function ProtectedLayout() {
   return <SocialProvider><DirectMessageProvider><CallProvider><SoundEffectsProvider><Outlet /></SoundEffectsProvider></CallProvider></DirectMessageProvider></SocialProvider>;
 }
 
+function RouteLoadingScreen() {
+  return <main className="loading-screen"><span className="pulse-dot" />Carregando tela</main>;
+}
+
 export default function App() {
   const { firebaseUser, loading } = useAuth();
   if (loading) return <LoadingScreen />;
 
   return (
     <AppErrorBoundary>
-      <Routes>
+      <Suspense fallback={<RouteLoadingScreen />}>
+        <Routes>
       <Route path="/login" element={firebaseUser ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route element={<AppShell />}>
@@ -74,7 +80,8 @@ export default function App() {
         </Route>
       </Route>
       <Route path="*" element={<Navigate to={firebaseUser ? "/" : "/login"} replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </AppErrorBoundary>
   );
 }

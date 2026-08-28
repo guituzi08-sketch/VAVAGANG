@@ -7,6 +7,7 @@ import { useDirectMessages } from "../contexts/DirectMessageContext";
 import { useSoundEffects } from "../contexts/SoundEffectsContext";
 import { sendRoomMessage, subscribeToRoom, subscribeToRoomMessages } from "../services/roomService";
 import ScreenShareViewer from "./ScreenShareViewer";
+import { getErrorMessage } from "../utils/errorMessage";
 
 export default function VoiceChannelPage({ roomId }) {
   return <VoiceErrorBoundary roomId={roomId}><VoiceChannelContent roomId={roomId} /></VoiceErrorBoundary>;
@@ -52,7 +53,7 @@ function VoiceChannelContent({ roomId }) {
   }, [roomId]);
   useEffect(() => {
     if (!roomId) return undefined;
-    return subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(error.message));
+    return subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(getErrorMessage(error, "Não foi possível carregar as mensagens da sala.")));
   }, [roomId]);
   useEffect(() => {
     if (!roomClosed) return;
@@ -61,7 +62,7 @@ function VoiceChannelContent({ roomId }) {
   }, [roomClosed, roomClosedMessage, navigate]);
   useEffect(() => { setAudioEnabled(localStream?.getAudioTracks()[0]?.enabled ?? true); }, [localStream]);
   useEffect(() => {
-    try { localStorage.setItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`, JSON.stringify(volumes)); } catch {}
+    try { localStorage.setItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`, JSON.stringify(volumes)); } catch (error) { setMessageError(getErrorMessage(error, "Não foi possível salvar os volumes locais.")); }
   }, [firebaseUser, volumes]);
   useEffect(() => {
     if (!Object.keys(remoteStreams).length) return undefined;
@@ -76,7 +77,7 @@ function VoiceChannelContent({ roomId }) {
     event.preventDefault();
     if (isSendingMessage || !messageText.trim()) return;
     setIsSendingMessage(true);
-    try { await sendRoomMessage(roomId, firebaseUser, messageText); setMessageText(""); setMessageError(""); } catch (error) { setMessageError(error.message); }
+    try { await sendRoomMessage(roomId, firebaseUser, messageText); setMessageText(""); setMessageError(""); } catch (error) { setMessageError(getErrorMessage(error, "Não foi possível enviar a mensagem.")); }
     finally { setIsSendingMessage(false); }
   }
 
@@ -90,7 +91,7 @@ function VoiceChannelContent({ roomId }) {
       await upload(file, soundName);
       event.currentTarget.reset();
       setSoundName("");
-    } catch {} finally { setIsUploading(false); }
+    } catch (error) { setMessageError(getErrorMessage(error, "Não foi possível enviar o efeito sonoro.")); } finally { setIsUploading(false); }
   }
 
   async function toggleCamera() {
@@ -129,7 +130,7 @@ function VoiceChannelContent({ roomId }) {
         <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={toggleMicrophone} title={audioEnabled ? "Silenciar" : "Ativar microfone"}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button ${cameraStream ? "active" : ""}`} onClick={toggleCamera} disabled={isCameraBusy} title={cameraStream ? "Desligar webcam" : "Ligar webcam"}>{cameraStream ? <Camera /> : <CameraOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={screenStream ? stopScreenShare : shareScreen} title={screenStream ? "Parar compartilhamento" : "Compartilhar tela"}><MonitorUp /><span>{screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
       </section>
       <section className="room-chat"><div className="voice-section-title"><span><Headphones size={16} /> Chat da sala</span><span className="chat-live">tempo real</span></div><div className="room-message-list">{messages.length === 0 && <p className="voice-empty">As mensagens desta sala aparecerão aqui.</p>}{messages.map((message) => <article className="room-message" key={message.id}><strong>{message.authorName}</strong><p>{message.text}</p></article>)}</div>{messageError && <p className="error-message">{messageError}</p>}<form className="room-message-form" onSubmit={submitMessage}><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Conversar em voz..." maxLength={500} disabled={isSendingMessage} /><button className="icon-button" disabled={!messageText.trim() || isSendingMessage} title="Enviar mensagem"><Send size={16} /></button></form></section>
-      <section className="sound-effects-panel"><div className="voice-section-title"><span><Music2 size={16} /> Efeitos sonoros</span><span className="chat-live">compartilhado</span></div><div className="sound-effect-list">{effects.length === 0 && <p className="voice-empty">Adicione um efeito para a sala.</p>}{effects.map((effect, index) => <div className="sound-effect-pad-wrap" key={effect.id}><button className="sound-effect-button" style={{ "--pad-accent": ["#5aa7ff", "#61d8b0", "#a993ff", "#ffb86b"][index % 4] }} onClick={() => trigger(effect)} title={`Reproduzir ${effect.name}`}><Music2 size={20} /><span>{effect.name}</span></button>{effect.createdBy === firebaseUser?.uid && <button className="sound-effect-delete" onClick={async () => { if (!window.confirm(`Excluir o efeito \"${effect.name}\"?`)) return; try { await remove(effect); } catch {} }} title="Excluir efeito"><Trash2 size={13} /> Excluir</button>}</div>)}</div><form className="sound-effect-form" onSubmit={submitSoundEffect}><input value={soundName} onChange={(event) => setSoundName(event.target.value)} placeholder="Nome opcional" maxLength={60} /><label className="sound-upload-button" title="Selecionar MP3 ou WAV"><Upload size={15} /><span>Adicionar áudio</span><input name="soundFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav" /></label><button className="secondary-button sound-upload-submit" type="submit" disabled={isUploading}>{isUploading ? "Enviando..." : "Enviar"}</button></form>{soundError && <p className="error-message">{soundError}</p>}{audioBlocked && <button className="secondary-button sound-unlock" onClick={() => setAudioBlocked(false)}>Ativar efeitos</button>}</section>
+      <section className="sound-effects-panel"><div className="voice-section-title"><span><Music2 size={16} /> Efeitos sonoros</span><span className="chat-live">compartilhado</span></div><div className="sound-effect-list">{effects.length === 0 && <p className="voice-empty">Adicione um efeito para a sala.</p>}{effects.map((effect, index) => <div className="sound-effect-pad-wrap" key={effect.id}><button className="sound-effect-button" style={{ "--pad-accent": ["#5aa7ff", "#61d8b0", "#a993ff", "#ffb86b"][index % 4] }} onClick={() => trigger(effect)} title={`Reproduzir ${effect.name}`}><Music2 size={20} /><span>{effect.name}</span></button>{effect.createdBy === firebaseUser?.uid && <button className="sound-effect-delete" onClick={async () => { if (!window.confirm(`Excluir o efeito \"${effect.name}\"?`)) return; try { await remove(effect); } catch (error) { setMessageError(getErrorMessage(error, "Não foi possível excluir o efeito sonoro.")); } }} title="Excluir efeito"><Trash2 size={13} /> Excluir</button>}</div>)}</div><form className="sound-effect-form" onSubmit={submitSoundEffect}><input value={soundName} onChange={(event) => setSoundName(event.target.value)} placeholder="Nome opcional" maxLength={60} /><label className="sound-upload-button" title="Selecionar MP3 ou WAV"><Upload size={15} /><span>Adicionar áudio</span><input name="soundFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav" /></label><button className="secondary-button sound-upload-submit" type="submit" disabled={isUploading}>{isUploading ? "Enviando..." : "Enviar"}</button></form>{soundError && <p className="error-message">{soundError}</p>}{audioBlocked && <button className="secondary-button sound-unlock" onClick={() => setAudioBlocked(false)}>Ativar efeitos</button>}</section>
     </div>
     {mediaError && <p className="error-message voice-error">{mediaError}</p>}
   </div>;

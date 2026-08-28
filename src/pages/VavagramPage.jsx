@@ -2,6 +2,7 @@ import { Camera, Image, Search, Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { getErrorMessage } from "../utils/errorMessage";
 import {
   createVavagramPost,
   createVavagramStory,
@@ -22,14 +23,14 @@ export default function VavagramPage() {
   useEffect(
     () =>
       subscribeToVavagramPosts(setPosts, (snapshotError) =>
-        setError(snapshotError.message),
+        setError(getErrorMessage(snapshotError, "Não foi possível carregar o Vavagram.")),
       ),
     [],
   );
   useEffect(
     () =>
       subscribeToVavagramStories(setStories, (snapshotError) =>
-        setError(snapshotError.message),
+        setError(getErrorMessage(snapshotError, "Não foi possível carregar os stories.")),
       ),
     [],
   );
@@ -44,7 +45,7 @@ export default function VavagramPage() {
       setCaption("");
       setOpen(false);
     } catch (publishError) {
-      setError(publishError.message);
+      setError(getErrorMessage(publishError, "Não foi possível publicar."));
     }
   }
   return (

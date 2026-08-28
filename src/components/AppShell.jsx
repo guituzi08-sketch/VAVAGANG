@@ -54,7 +54,7 @@ export default function AppShell() {
       <div className="rail-separator" />
       <RailButton label="Início" icon={Home} to="/" />
       <RailButton label="Amigos" icon={UsersRound} to="/friends" />
-      <RailButton label="Comunidades" icon={Compass} to="/" />
+      <RailButton label="Comunidades" icon={Compass} to="/groups" />
       <div className="rail-spacer" />
       <RailButton label="Notificações" icon={Bell} to="/requests" />
       <RailButton label="Vavagram" icon={Camera} to="/vavagram" />
@@ -67,7 +67,7 @@ export default function AppShell() {
       <section className="workspace-main"><Outlet /></section>
       <ContextPanel />
       {activeRoomId && <VoiceMiniPlayer onOpen={() => navigate(`/voice/${activeRoomId}`)} />}
-      {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} isSending={isSendingDirectMessage} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); if (isSendingDirectMessage || !directText.trim()) return; setSendingDirectMessage(true); try { await sendMessage(directText); setDirectText(""); } catch {} finally { setSendingDirectMessage(false); } }} />}
+      {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} isSending={isSendingDirectMessage} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); if (isSendingDirectMessage || !directText.trim()) return; setSendingDirectMessage(true); try { await sendMessage(directText); setDirectText(""); } catch (error) { console.error("[DirectMessage] falha ao enviar pela interface", error); } finally { setSendingDirectMessage(false); } }} />}
   </div>;
 }
 

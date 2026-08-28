@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { markDirectMessageRead, sendDirectMessage, subscribeToDirectMessages, subscribeToUnreadDirectMessages } from "../services/directMessageService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 const DirectMessageContext = createContext(null);
 
@@ -14,7 +15,7 @@ export function DirectMessageProvider({ children }) {
   function handleFirestoreError(snapshotError) {
     setError(snapshotError.code === "failed-precondition"
       ? "O chat privado está temporariamente indisponível. Tente novamente."
-      : snapshotError.message || "Não foi possível carregar as mensagens.");
+      : getErrorMessage(snapshotError, "Não foi possível carregar as mensagens."));
   }
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export function DirectMessageProvider({ children }) {
       await sendDirectMessage(firebaseUser, contact, text);
     } catch (sendError) {
       console.error("[DirectMessage] falha ao enviar mensagem", sendError);
-      setError(sendError.message || "Não foi possível enviar a mensagem.");
+      setError(getErrorMessage(sendError, "Não foi possível enviar a mensagem."));
       throw sendError;
     }
   }

@@ -23,6 +23,7 @@ import {
   inviteToGroup,
   removeMemberFromGroup,
 } from "../services/communityService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 const tabs = ["Todos", "Online", "Solicitações", "Bloqueados"];
 
@@ -92,7 +93,7 @@ function FriendsView() {
         setSearchError("");
       } catch (error) {
         setSearchResults([]);
-        setSearchError(error.message);
+        setSearchError(getErrorMessage(error, "Não foi possível pesquisar usuários."));
       }
     }, 300);
     return () => window.clearTimeout(timer);
@@ -102,7 +103,7 @@ function FriendsView() {
       await addFriendRequest(user);
       setSentRequests((current) => ({ ...current, [user.uid]: true }));
     } catch (error) {
-      setSearchError(error.message);
+      setSearchError(getErrorMessage(error, "Não foi possível enviar a solicitação."));
     }
   }
   return (
@@ -581,18 +582,18 @@ function GroupsView({ groupId }) {
         <aside className="group-channel-list">
           <div className="channel-heading">
             <span>Canais</span>
-            <button
+            {canManage && <button
               className="nav-add"
               onClick={() => setShowChannel(true)}
               title="Criar canal"
             >
               <Plus size={15} />
-            </button>
+            </button>}
           </div>
           {categories.map((category) => (
             <div key={category}>
               <span className="nav-caption">{category}</span>
-              {group.channels
+              {(group.channels ?? [])
                 .filter((channel) => channel.category === category)
                 .map((channel) => (
                   <button
@@ -608,13 +609,13 @@ function GroupsView({ groupId }) {
                   >
                     <span>{channel.type === "VOICE" ? "🔊" : "#"}</span>
                     {channel.name}
-                    <MoreHorizontal
+                    {canManage && <MoreHorizontal
                       size={14}
                       onClick={async (event) => {
                         event.stopPropagation();
                         await deleteChannel(group.id, channel.id);
                       }}
-                    />
+                    />}
                   </button>
                 ))}
             </div>
@@ -709,7 +710,7 @@ function GroupMembersPanel({
       await inviteUser(group.id, user);
       setMessage("Convite enviado.");
     } catch (error) {
-      setMessage(error.message);
+      setMessage(getErrorMessage(error, "Não foi possível enviar o convite."));
     }
   }
   return (
@@ -811,7 +812,7 @@ function GroupsList({ groups, onCreate, onOpen, modal }) {
             <strong>{group.name}</strong>
             <span>{group.description || "Sem descrição"}</span>
             <small>
-              {group.channels.length} canais ·{" "}
+              {(group.channels ?? []).length} canais ·{" "}
               {group.privacy === "private" ? "Privado" : "Público"}
             </small>
           </button>
@@ -949,7 +950,7 @@ function TextChannelView({ channelId }) {
     deleteChannelMessage,
   } = useSocial();
   const channel = groups
-    .flatMap((group) => group.channels)
+    .flatMap((group) => group.channels ?? [])
     .find((item) => item.id === channelId);
   const [text, setText] = useState("");
   const [messageError, setMessageError] = useState("");
@@ -971,10 +972,10 @@ function TextChannelView({ channelId }) {
         description="Conversa da comunidade."
       />
       <div className="text-message-list">
-        {channel.messages.length === 0 && (
+        {(channel.messages ?? []).length === 0 && (
           <EmptyLine text="Nenhuma mensagem. Comece a conversa." />
         )}
-        {channel.messages.map((message) => (
+        {(channel.messages ?? []).map((message) => (
           <article className="text-message" key={message.id}>
             <div className="avatar avatar-fallback">
               {message.authorName?.[0] ?? "V"}
@@ -986,12 +987,10 @@ function TextChannelView({ channelId }) {
               <div className="message-tools">
                 <button
                   onClick={() =>
-                    editChannelMessage(
-                      channel.id,
-                      message.id,
-                      window.prompt("Editar mensagem", message.text) ??
-                        message.text,
-                    )
+                    (() => {
+                      const editedText = window.prompt("Editar mensagem", message.text);
+                      if (editedText?.trim()) editChannelMessage(channel.id, message.id, editedText);
+                    })()
                   }
                 >
                   Editar
@@ -1011,7 +1010,7 @@ function TextChannelView({ channelId }) {
         className="channel-message-form"
         onSubmit={(event) => {
           event.preventDefault();
-          sendChannelMessage(channel.id, text).then(() => setText("")).catch((error) => setMessageError(error.message));
+          sendChannelMessage(channel.id, text).then(() => setText("")).catch((error) => setMessageError(getErrorMessage(error, "Não foi possível enviar a mensagem.")));
         }}
       >
         <input

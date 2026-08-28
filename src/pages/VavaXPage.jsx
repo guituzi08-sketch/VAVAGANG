@@ -1,4 +1,5 @@
 import {
+  Bell,
   Heart,
   ImagePlus,
   MessageCircle,
@@ -18,10 +19,13 @@ import {
   hasVavaXLike,
   isVavaXFollowing,
   subscribeToVavaXComments,
+  subscribeToVavaXNotifications,
   subscribeToVavaXPosts,
   toggleVavaXFollow,
   toggleVavaXLike,
+  markVavaXNotificationRead,
 } from "../services/vavaxService";
+import { getErrorMessage } from "../utils/errorMessage";
 
 export default function VavaXPage() {
   const { firebaseUser, profile } = useAuth();
@@ -30,14 +34,17 @@ export default function VavaXPage() {
   const [caption, setCaption] = useState("");
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [error, setError] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(
     () =>
       subscribeToVavaXPosts(setPosts, (snapshotError) =>
-        setError(snapshotError.message),
+        setError(getErrorMessage(snapshotError, "Não foi possível carregar os posts.")),
       ),
     [],
   );
+  useEffect(() => subscribeToVavaXNotifications(firebaseUser.uid, setNotifications, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar as notificações."))), [firebaseUser.uid]);
 
   async function publish(event) {
     event.preventDefault();
@@ -52,7 +59,7 @@ export default function VavaXPage() {
       setComposerOpen(false);
       setError("");
     } catch (publishError) {
-      setError(publishError.message);
+      setError(getErrorMessage(publishError, "Não foi possível publicar o post."));
     }
   }
 
@@ -67,6 +74,10 @@ export default function VavaXPage() {
           <span className="vavax-status">
             <i /> conectado
           </span>
+          <button className="icon-button" title="Notificações VavaX" onClick={() => setShowNotifications((current) => !current)}>
+            <Bell size={16} /> {notifications.filter((item) => !item.read).length || ""}
+          </button>
+          {showNotifications && <div className="vavax-notifications">{notifications.length === 0 && <span>Nenhuma notificação.</span>}{notifications.slice(0, 8).map((item) => <button key={item.id} className={item.read ? "" : "unread"} onClick={() => markVavaXNotificationRead(item.id).catch((notificationError) => setError(notificationError.message))}>{item.senderName} {item.type === "like" ? "curtiu seu post." : item.type === "comment" ? "comentou no seu post." : "começou a seguir você."}</button>)}</div>}
           <div className="avatar avatar-fallback">
             {profile?.displayName?.[0] ?? "V"}
           </div>

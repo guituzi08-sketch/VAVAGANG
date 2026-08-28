@@ -2,6 +2,7 @@ import { Flame, Gamepad2, MessageCircle, Radio, Users, Zap } from "lucide-react"
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { getErrorMessage } from "../utils/errorMessage";
 import { addMomentReaction, subscribeToMomentReactions, subscribeToRooms } from "../services/roomService";
 
 const reactions = ["❤️", "😂", "🔥", "👏", "😮", "💀", "🎉"];
@@ -10,7 +11,7 @@ export default function MomentsPage() {
   const { firebaseUser } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [error, setError] = useState("");
-  useEffect(() => subscribeToRooms(setRooms, (snapshotError) => setError(snapshotError.message)), []);
+  useEffect(() => subscribeToRooms(setRooms, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar os momentos."))), []);
   const activeRooms = rooms.filter((room) => (room.participantCount ?? 0) > 0);
   const peoplePresent = activeRooms.reduce((total, room) => total + (room.participantCount ?? 0), 0);
 
