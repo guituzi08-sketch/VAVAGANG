@@ -32,6 +32,11 @@ export class PeerConnectionManager {
     this.onError(error, remoteUid);
   }
 
+  enqueueSignal(state, operation) {
+    state.signaling = state.signaling.then(operation).catch((error) => this.reportPeerError(error, state.remoteUid));
+    return state.signaling;
+  }
+
   async ensurePeer(remoteUid, shouldOffer = false) {
     const current = this.peers.get(remoteUid);
     if (current && current.pc.connectionState !== PEER_STATES.CLOSED) {
@@ -50,7 +55,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, peerKey: peerKey(this.localUid, remoteUid), pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), localSessionId: createSessionId(), localOfferId: null, localOfferRevision: 0, remoteOfferRevision: 0, remoteSessionId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, peerKey: peerKey(this.localUid, remoteUid), pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), negotiationPending: false, localSessionId: createSessionId(), localOfferId: null, localOfferRevision: 0, remoteOfferRevision: 0, remoteSessionId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const localAudioTrack = this.localStream.getAudioTracks()[0] ?? null;
     const audioSender = localAudioTrack ? pc.addTrack(localAudioTrack, this.localStream) : null;
@@ -88,8 +93,10 @@ export class PeerConnectionManager {
   }
 
   async negotiate(state, iceRestart = false) {
-    state.negotiation = state.negotiation.then(async () => {
+    state.negotiationPending = true;
+    return this.enqueueSignal(state, async () => {
       if (state.closed || state.pc.signalingState !== "stable" || state.makingOffer) return;
+      state.negotiationPending = false;
       state.makingOffer = true;
       try {
         const offer = await state.pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
@@ -99,8 +106,7 @@ export class PeerConnectionManager {
         console.info("[WebRTC] offer", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: state.localOfferId, offerRevision: state.localOfferRevision, signalingState: state.pc.signalingState });
         await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, peerKey: state.peerKey, type: "offer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: state.localOfferId, offerRevision: state.localOfferRevision, sdp: offer.sdp });
       } finally { state.makingOffer = false; }
-    }).catch((error) => this.reportPeerError(error, state.remoteUid));
-    return state.negotiation;
+    });
   }
 
   async handleSignal(signal) {
@@ -112,7 +118,7 @@ export class PeerConnectionManager {
     }
     if (this.participantSessions.get(signal.from) !== signal.callSessionId) return;
     const state = await this.ensurePeer(signal.from);
-    state.signaling = state.signaling.then(async () => {
+    return this.enqueueSignal(state, async () => {
       if (signal.peerKey && signal.peerKey !== state.peerKey) {
         console.warn("[WebRTC] signal ignored: wrong peerKey", { localUser: this.localUid, remoteUser: signal.from, expectedPeerKey: state.peerKey, receivedPeerKey: signal.peerKey });
         return;
@@ -127,8 +133,7 @@ export class PeerConnectionManager {
         const replacement = await this.ensurePeer(signal.from);
         await this.handleOffer(replacement, signal);
       }
-    }).catch((error) => this.reportPeerError(error, state.remoteUid));
-    return state.signaling;
+    });
   }
 
   async handleOffer(state, signal) {
@@ -144,13 +149,16 @@ export class PeerConnectionManager {
     const collision = state.makingOffer || state.pc.signalingState !== "stable";
     state.ignoreOffer = !state.polite && collision;
     if (state.ignoreOffer) return;
-    if (collision) await state.pc.setLocalDescription({ type: "rollback" });
+    if (collision && state.pc.signalingState !== "stable") await state.pc.setLocalDescription({ type: "rollback" });
+    if (state.closed || state.pc.signalingState !== "stable") return;
     await state.pc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
     state.remoteDescriptionSet = true;
     state.remoteSessionId = signal.sessionId;
     state.remoteOfferRevision = offerRevision;
     await this.flushCandidates(state);
+    if (state.closed || state.pc.signalingState !== "have-remote-offer") return;
     const answer = await state.pc.createAnswer();
+    if (state.closed || state.pc.signalingState !== "have-remote-offer") return;
     await state.pc.setLocalDescription(answer);
     console.info("[WebRTC] answer", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, offerId: signal.offerId ?? signal.sessionId, offerRevision, signalingState: state.pc.signalingState });
     await sendSignal(this.db, this.roomId, { from: this.localUid, to: state.remoteUid, peerKey: state.peerKey, type: "answer", callSessionId: this.callSessionId, sessionId: state.localSessionId, offerId: signal.offerId ?? signal.sessionId, offerRevision, sdp: answer.sdp });
@@ -163,6 +171,7 @@ export class PeerConnectionManager {
     state.remoteDescriptionSet = true;
     state.remoteSessionId = signal.sessionId;
     await this.flushCandidates(state);
+    if (state.negotiationPending) this.negotiate(state);
   }
 
   async handleCandidate(candidate) {
@@ -180,7 +189,7 @@ export class PeerConnectionManager {
     }
     if (this.participantSessions.get(candidate.from) !== candidate.callSessionId) return;
     const state = await this.ensurePeer(candidate.from);
-    state.signaling = state.signaling.then(async () => {
+    return this.enqueueSignal(state, async () => {
       if (state.processedCandidates.has(candidate.id)) return;
       state.processedCandidates.add(candidate.id);
       if (state.remoteSessionId && candidate.sessionId !== state.remoteSessionId) {
@@ -189,8 +198,7 @@ export class PeerConnectionManager {
       }
       if (!state.remoteDescriptionSet) state.pendingCandidates.push(candidate);
       else await state.pc.addIceCandidate(candidate.candidate).then(() => console.info("[WebRTC] ICE applied", { localUser: this.localUid, remoteUser: state.remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, candidateSessionId: candidate.sessionId })).catch((error) => this.reportPeerError(error, state.remoteUid));
-    }).catch((error) => this.reportPeerError(error, state.remoteUid));
-    return state.signaling;
+    });
   }
 
   async flushCandidates(state) {
@@ -228,12 +236,15 @@ export class PeerConnectionManager {
     participants.filter((participant) => participant.uid !== this.localUid).forEach((participant) => {
       const current = this.peers.get(participant.uid);
       if (current && current.participantSessionId && current.participantSessionId !== participant.callSessionId) this.removePeer(participant.uid);
-      this.ensurePeer(participant.uid, this.localUid < participant.uid).then((state) => { state.participantSessionId = participant.callSessionId; }).catch(this.onError);
+      this.ensurePeer(participant.uid, this.localUid < participant.uid).then((state) => {
+        if (this.peers.get(participant.uid) === state && this.participantSessions.get(participant.uid) === participant.callSessionId) state.participantSessionId = participant.callSessionId;
+      }).catch(this.onError);
       const queued = this.unknownSignals.get(participant.uid) ?? [];
       this.unknownSignals.delete(participant.uid);
       queued.forEach((signal) => (signal.candidate ? this.handleCandidate(signal) : this.handleSignal(signal)).catch(this.onError));
     });
     [...this.peers.keys()].filter((uid) => !remoteIds.has(uid)).forEach((uid) => this.removePeer(uid));
+    [...this.unknownSignals.keys()].filter((uid) => !remoteIds.has(uid)).forEach((uid) => this.unknownSignals.delete(uid));
   }
 
   replaceTrack(kind, track) {
@@ -252,7 +263,11 @@ export class PeerConnectionManager {
     state.pc.ontrack = null;
     state.pc.onicecandidate = null;
     state.pc.close();
+    state.negotiationPending = false;
+    state.pendingCandidates.length = 0;
+    state.processedCandidates.clear();
     this.peers.delete(remoteUid);
+    this.unknownSignals.delete(remoteUid);
     this.onRemoteStream(remoteUid, null);
   }
 
