@@ -2,13 +2,166 @@ import { Camera, Image, Search, Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { createVavagramPost, subscribeToVavagramPosts, subscribeToVavagramStories } from "../services/vavagramService";
+import {
+  createVavagramPost,
+  createVavagramStory,
+  subscribeToVavagramPosts,
+  subscribeToVavagramStories,
+} from "../services/vavagramService";
 
 export default function VavagramPage() {
   const { profile } = useAuth();
-  const [posts, setPosts] = useState([]); const [stories, setStories] = useState([]); const [url, setUrl] = useState(""); const [caption, setCaption] = useState(""); const [open, setOpen] = useState(false); const [error, setError] = useState("");
-  useEffect(() => subscribeToVavagramPosts(setPosts, (snapshotError) => setError(snapshotError.message)), []);
-  useEffect(() => subscribeToVavagramStories(setStories, (snapshotError) => setError(snapshotError.message)), []);
-  async function publish() { try { if (!/^https?:\/\/\S+$/i.test(url.trim())) throw new Error("Informe uma URL externa válida."); await createVavagramPost({ media: [{ url: url.trim(), type: "image" }], caption, visibility: "Público", author: profile }); setUrl(""); setCaption(""); setOpen(false); } catch (publishError) { setError(publishError.message); } }
-  return <div className="vavagram-page"><header className="vavagram-topbar"><NavLink className="vavagram-brand" to="/vavagram"><span><Camera size={19} /></span><strong>VAVAGRAM</strong></NavLink><label className="vavagram-search"><Search size={15} /><input placeholder="Pesquisar no Vavagram" /></label><div className="vavagram-tools"><button className="vavagram-icon" title="Mensagens"><Send size={17} /></button><div className="avatar avatar-fallback">{profile?.displayName?.[0] ?? "V"}</div></div></header><div className="vavagram-layout"><aside className="vavagram-sidebar"><div className="vavagram-profile-card"><div className="avatar avatar-fallback vavagram-avatar">{profile?.displayName?.[0] ?? "V"}</div><strong>{profile?.nickname || profile?.displayName || "Usuário"}</strong><span>@{profile?.username ?? "username"}</span><p>{profile?.bio || "Seu perfil visual no Vavagang."}</p><NavLink className="vavagram-profile-link" to="/settings">Editar perfil</NavLink></div></aside><main className="vavagram-feed"><div className="vavagram-feed-heading"><div><p className="eyebrow">Rede visual</p><h1>Feed</h1></div><button className="vavagram-create" onClick={() => setOpen(true)}><Image size={16} /> Publicar URL</button></div><div className="vavagram-post-list">{posts.map((post) => <article className="vavagram-post" key={post.id}><header><strong>{post.displayName ?? "Usuário"}</strong><span>@{post.username ?? "username"}</span></header>{post.caption && <p className="post-caption">{post.caption}</p>}{post.mediaUrl && <img className="post-media" src={post.mediaUrl} alt={post.caption ?? "Publicação"} />}</article>)}</div></main></div>{open && <div className="composer-backdrop" onClick={() => setOpen(false)}><section className="composer-modal" onClick={(event) => event.stopPropagation()}><button className="composer-close" onClick={() => setOpen(false)}><X size={17} /></button><p className="eyebrow">Novo conteúdo</p><h2>Publicar por URL externa</h2><input className="modal-input" type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://site.com/imagem.jpg" required /><textarea className="modal-input modal-textarea" value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Escreva uma legenda..." maxLength={220} />{error && <p className="settings-error">{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={() => setOpen(false)}>Cancelar</button><button className="primary-button" onClick={publish} disabled={!url.trim()}>Publicar</button></div></section></div>}{error && !open && <p className="settings-error">{error}</p>}</div>;
+  const [posts, setPosts] = useState([]);
+  const [stories, setStories] = useState([]);
+  const [url, setUrl] = useState("");
+  const [caption, setCaption] = useState("");
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [contentType, setContentType] = useState("post");
+  useEffect(
+    () =>
+      subscribeToVavagramPosts(setPosts, (snapshotError) =>
+        setError(snapshotError.message),
+      ),
+    [],
+  );
+  useEffect(
+    () =>
+      subscribeToVavagramStories(setStories, (snapshotError) =>
+        setError(snapshotError.message),
+      ),
+    [],
+  );
+  async function publish() {
+    try {
+      if (!/^https?:\/\/\S+$/i.test(url.trim()))
+        throw new Error("Informe uma URL externa válida.");
+      const payload = { mediaUrl: url.trim(), mediaType: "image", caption, author: profile };
+      if (contentType === "story") await createVavagramStory(payload);
+      else await createVavagramPost({ media: [{ url: url.trim(), type: "image" }], caption, visibility: "Público", author: profile });
+      setUrl("");
+      setCaption("");
+      setOpen(false);
+    } catch (publishError) {
+      setError(publishError.message);
+    }
+  }
+  return (
+    <div className="vavagram-page">
+      <header className="vavagram-topbar">
+        <NavLink className="vavagram-brand" to="/vavagram">
+          <span>
+            <Camera size={19} />
+          </span>
+          <strong>VAVAGRAM</strong>
+        </NavLink>
+        <label className="vavagram-search">
+          <Search size={15} />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar no Vavagram" />
+        </label>
+        <div className="vavagram-tools">
+          <NavLink className="vavagram-icon" to="/messages" title="Mensagens">
+            <Send size={17} />
+          </NavLink>
+          <div className="avatar avatar-fallback">
+            {profile?.displayName?.[0] ?? "V"}
+          </div>
+        </div>
+      </header>
+      <div className="vavagram-layout">
+        <aside className="vavagram-sidebar">
+          <div className="vavagram-profile-card">
+            <div className="avatar avatar-fallback vavagram-avatar">
+              {profile?.displayName?.[0] ?? "V"}
+            </div>
+            <strong>
+              {profile?.nickname || profile?.displayName || "Usuário"}
+            </strong>
+            <span>@{profile?.username ?? "username"}</span>
+            <p>{profile?.bio || "Seu perfil visual no Vavagang."}</p>
+            <NavLink className="vavagram-profile-link" to="/settings">
+              Editar perfil
+            </NavLink>
+          </div>
+        </aside>
+        <main className="vavagram-feed">
+          <div className="vavagram-feed-heading">
+            <div>
+              <p className="eyebrow">Rede visual</p>
+              <h1>Feed</h1>
+            </div>
+            <button className="vavagram-create" onClick={() => { setContentType("post"); setOpen(true); }}>
+              <Image size={16} /> Publicar URL
+            </button>
+          </div>
+          <div className="story-strip"><strong>Stories ativos</strong>{stories.length === 0 && <span>Nenhum story ativo.</span>}{stories.map((story) => <a href={story.mediaUrl} target="_blank" rel="noreferrer" key={story.id}>{story.displayName}</a>)}<button className="secondary-button" onClick={() => { setContentType("story"); setOpen(true); }}>Publicar story</button></div>
+          <div className="vavagram-post-list">
+            {posts.filter((post) => !search.trim() || `${post.displayName} ${post.username} ${post.caption}`.toLowerCase().includes(search.trim().toLowerCase())).map((post) => (
+              <article className="vavagram-post" key={post.id}>
+                <header>
+                  <strong>{post.displayName ?? "Usuário"}</strong>
+                  <span>@{post.username ?? "username"}</span>
+                </header>
+                {post.caption && <p className="post-caption">{post.caption}</p>}
+                {post.mediaUrl && (
+                  <img
+                    className="post-media"
+                    src={post.mediaUrl}
+                    alt={post.caption ?? "Publicação"}
+                  />
+                )}
+              </article>
+            ))}
+          </div>
+        </main>
+      </div>
+      {open && (
+        <div className="composer-backdrop" onClick={() => setOpen(false)}>
+          <section
+            className="composer-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button className="composer-close" onClick={() => setOpen(false)}>
+              <X size={17} />
+            </button>
+            <p className="eyebrow">Novo conteúdo</p>
+            <h2>{contentType === "story" ? "Publicar story" : "Publicar por URL externa"}</h2>
+            <input
+              className="modal-input"
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://site.com/imagem.jpg"
+              required
+            />
+            <textarea
+              className="modal-input modal-textarea"
+              value={caption}
+              onChange={(event) => setCaption(event.target.value)}
+              placeholder="Escreva uma legenda..."
+              maxLength={220}
+            />
+            {error && <p className="settings-error">{error}</p>}
+            <div className="modal-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="primary-button"
+                onClick={publish}
+                disabled={!url.trim()}
+              >
+                {contentType === "story" ? "Publicar story" : "Publicar"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {error && !open && <p className="settings-error">{error}</p>}
+    </div>
+  );
 }

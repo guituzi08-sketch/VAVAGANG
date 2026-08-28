@@ -150,7 +150,7 @@ function RemoteAudio({ streams, volume, onBlocked }) {
       if (!tracks.some((track) => track.readyState === "live")) return;
       audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { audioTrackCount: tracks.length }))
         .catch((error) => {
-          console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { userId, name: error.name, message: error.message });
+          console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { name: error.name, message: error.message });
           if (error.name !== "AbortError") onBlocked();
         });
     };

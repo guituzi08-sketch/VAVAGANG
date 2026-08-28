@@ -1,4 +1,4 @@
-import { addDoc, collection, collectionGroup, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { supabase } from "../supabase";
 
@@ -11,27 +11,15 @@ function getSafeFileName(fileName) {
 
 export function subscribeToSoundEffects(roomId, onChange, onError) {
   const globalEffects = new Map();
-  const legacyEffects = new Map();
   const publish = () => {
-    const uniqueEffects = new Map();
-    [...globalEffects.values(), ...legacyEffects.values()].forEach((effect) => {
-      const effectKey = effect.storagePath || effect.publicUrl || `${effect.sourceCollection}/${effect.id}`;
-      const current = uniqueEffects.get(effectKey);
-      if (!current || effect.sourceCollection === "soundEffects") uniqueEffects.set(effectKey, effect);
-    });
-    onChange([...uniqueEffects.values()].sort((first, second) => (second.createdAt?.seconds ?? 0) - (first.createdAt?.seconds ?? 0)));
+    onChange([...globalEffects.values()].sort((first, second) => (second.createdAt?.seconds ?? 0) - (first.createdAt?.seconds ?? 0)));
   };
   const unsubscribeGlobal = onSnapshot(query(collection(db, "soundEffects"), orderBy("createdAt", "desc")), (snapshot) => {
     globalEffects.clear();
     snapshot.docs.forEach((item) => globalEffects.set(item.id, { id: item.id, sourceCollection: "soundEffects", ...item.data() }));
     publish();
   }, onError);
-  const unsubscribeLegacy = onSnapshot(query(collectionGroup(db, "soundEffects")), (snapshot) => {
-    legacyEffects.clear();
-    snapshot.docs.forEach((item) => legacyEffects.set(item.ref.path, { id: item.id, sourceCollection: item.ref.parent.path, ...item.data() }));
-    publish();
-  }, onError);
-  return () => { unsubscribeGlobal(); unsubscribeLegacy(); };
+  return () => unsubscribeGlobal();
 }
 
 export function subscribeToSoundEffectEvents(roomId, onChange, onError) {
@@ -86,7 +74,5 @@ export async function triggerSoundEffect(roomId, user, effectId) {
 export async function removeSoundEffect(roomId, effect) {
   const { error } = await supabase.storage.from(BUCKET).remove([effect.storagePath]);
   if (error) throw error;
-  await deleteDoc(effect.sourceCollection === "soundEffects"
-    ? doc(db, "soundEffects", effect.id)
-    : doc(db, ...effect.sourceCollection.split("/"), effect.id));
+  await deleteDoc(doc(db, "soundEffects", effect.id));
 }

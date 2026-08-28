@@ -67,6 +67,11 @@ export async function toggleVavaXLike(post, user) {
   return liked;
 }
 
+export async function hasVavaXLike(postId, userId) {
+  if (!postId || !userId) return false;
+  return (await getDoc(doc(db, "vavaxLikes", `${postId}_${userId}`))).exists();
+}
+
 export async function addVavaXComment(post, user, text) {
   const cleanText = text.trim();
   if (!cleanText) return;
@@ -94,6 +99,11 @@ export async function toggleVavaXFollow(targetUserId, user) {
   await setDoc(followRef, { followingId: targetUserId, followerId: user.uid, createdAt: serverTimestamp() });
   await createVavaXNotification(targetUserId, user, "follow", { profileId: user.uid });
   return true;
+}
+
+export async function isVavaXFollowing(targetUserId, userId) {
+  if (!targetUserId || !userId || targetUserId === userId) return false;
+  return (await getDoc(doc(db, "vavaxFollows", `${targetUserId}_${userId}`))).exists();
 }
 
 export async function createVavaXNotification(recipientId, user, type, metadata) {

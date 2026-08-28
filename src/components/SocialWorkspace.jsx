@@ -952,6 +952,7 @@ function TextChannelView({ channelId }) {
     .flatMap((group) => group.channels)
     .find((item) => item.id === channelId);
   const [text, setText] = useState("");
+  const [messageError, setMessageError] = useState("");
   if (!channel)
     return (
       <div className="social-content">
@@ -980,12 +981,7 @@ function TextChannelView({ channelId }) {
             </div>
             <div>
               <strong>{message.authorName}</strong>
-              <small>
-                {message.createdAt.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </small>
+              <small>{formatMessageTime(message.createdAt)}</small>
               <p>{message.text}</p>
               <div className="message-tools">
                 <button
@@ -1010,12 +1006,12 @@ function TextChannelView({ channelId }) {
           </article>
         ))}
       </div>
+      {messageError && <p className="error-message">{messageError}</p>}
       <form
         className="channel-message-form"
         onSubmit={(event) => {
           event.preventDefault();
-          sendChannelMessage(channel.id, text);
-          setText("");
+          sendChannelMessage(channel.id, text).then(() => setText("")).catch((error) => setMessageError(error.message));
         }}
       >
         <input
@@ -1029,6 +1025,11 @@ function TextChannelView({ channelId }) {
       </form>
     </div>
   );
+}
+function formatMessageTime(timestamp) {
+  if (!timestamp) return "agora";
+  const date = typeof timestamp.toDate === "function" ? timestamp.toDate() : new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? "agora" : date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 function SendIcon() {
   return <MessageCircle size={16} />;

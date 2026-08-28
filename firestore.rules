@@ -20,7 +20,13 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if signedIn();
-      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'displayNameNormalized', 'nickname', 'nicknameNormalized',
+          'username', 'usernameNormalized', 'photoURL', 'bannerURL', 'bio', 'status',
+          'settings', 'updatedAt'
+        ]);
       allow delete: if false;
     }
 
@@ -47,7 +53,10 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read, update, delete: if signedIn() && resource.data.recipientId == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.recipientId != null;
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId != request.auth.uid
+        && request.resource.data.type in ['friend_request', 'friend_accepted', 'group_invite', 'channel_message', 'mention', 'direct_message'];
     }
 
     match /groupInvites/{inviteId} {
@@ -133,8 +142,14 @@ service cloud.firestore {
     match /vavaxPosts/{postId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
-      allow update: if signedIn() && resource.data.authorId == request.auth.uid
-        && request.resource.data.authorId == resource.data.authorId;
+      allow update: if signedIn() && request.resource.data.authorId == resource.data.authorId
+        && ((resource.data.authorId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['caption', 'mediaUrl']))
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+            && (request.resource.data.likeCount == resource.data.likeCount + 1
+              || request.resource.data.likeCount == resource.data.likeCount - 1))
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount'])
+            && request.resource.data.commentCount == resource.data.commentCount + 1));
       allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
     }
 
@@ -239,9 +254,10 @@ service cloud.firestore {
       }
 
       match /messages/{messageId} {
-        allow read: if signedIn();
+        allow read: if canAccessRoom(roomId);
         allow create: if signedIn()
           && request.resource.data.authorId == request.auth.uid
+          && canAccessRoom(roomId)
           && get(/databases/$(database)/documents/rooms/$(roomId)).data.status != 'closed';
         allow delete: if signedIn() && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId == request.auth.uid);
         allow update: if false;

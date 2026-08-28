@@ -25,8 +25,8 @@ import { useCall } from "../contexts/CallContext";
 import { createRoom, sendRoomMessage, subscribeToRoomMessages, subscribeToRooms } from "../services/roomService";
 
 function Avatar({ image, profile, size = "normal" }) {
-  if (profile?.photoURL && !image) return <img className={`dashboard-avatar ${size}`} src={profile.photoURL} alt="" />;
-  return <img className={`dashboard-avatar ${size}`} src={`https://i.pravatar.cc/${size === "large" ? 64 : 40}?img=${image ?? 1}`} alt="" />;
+  if (profile?.photoURL) return <img className={`dashboard-avatar ${size}`} src={profile.photoURL} alt="" />;
+  return <span className={`dashboard-avatar dashboard-avatar-fallback ${size}`} aria-label={profile?.displayName ?? "Usuário"}>{profile?.displayName?.[0] ?? "V"}</span>;
 }
 
 export default function HomePage() {
