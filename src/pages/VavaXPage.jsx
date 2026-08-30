@@ -123,7 +123,6 @@ export default function VavaXPage() {
               <ImagePlus size={16} /> Publicar
             </button>
           </div>
-          {error && <p className="error-message">{error}</p>}
           <div className="vavax-post-list">
             {posts.length === 0 && (
               <div className="vavax-empty">
