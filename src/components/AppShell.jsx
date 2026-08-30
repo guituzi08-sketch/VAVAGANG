@@ -4,7 +4,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
-import { createRoom, subscribeToRooms } from "../services/roomService";
+import { createRoom, deleteRoom, subscribeToRooms } from "../services/roomService";
 import ScreenShareViewer from "./ScreenShareViewer";
 import { getErrorMessage } from "../utils/errorMessage";
 
@@ -38,6 +38,9 @@ export default function AppShell() {
   const [roomName, setRoomName] = useState("");
   const [isCreatingRoom, setCreatingRoom] = useState(false);
   const [roomError, setRoomError] = useState("");
+  const [roomActionMenuId, setRoomActionMenuId] = useState(null);
+  const [pendingRoomDelete, setPendingRoomDelete] = useState(null);
+  const [deletingRoomId, setDeletingRoomId] = useState(null);
   const [directText, setDirectText] = useState("");
   const [isSendingDirectMessage, setSendingDirectMessage] = useState(false);
   useEffect(() => subscribeToRooms(setRooms, (error) => setRoomError(getErrorMessage(error, "Não foi possível carregar as salas."))), []);
@@ -69,6 +72,21 @@ export default function AppShell() {
     }
   }
 
+  async function handleDeleteRoom(room) {
+    if (!room || deletingRoomId) return;
+    setPendingRoomDelete(null);
+    setRoomActionMenuId(null);
+    setDeletingRoomId(room.id);
+    try {
+      await deleteRoom(room.id, firebaseUser);
+      setRoomError("");
+    } catch (error) {
+      setRoomError(getErrorMessage(error, "Não foi possível excluir a sala."));
+    } finally {
+      setDeletingRoomId(null);
+    }
+  }
+
   return <div className="workspace-shell">
     <aside className="community-rail" aria-label="Navegação principal">
       <NavLink className="rail-logo" to="/" title="Vavagang"><span>V</span></NavLink>
@@ -82,11 +100,12 @@ export default function AppShell() {
     </aside>
     <aside className="navigation-panel" aria-label="Navegação da seção">
       <div className="navigation-header"><strong>VAVAGANG</strong><NavLink className="icon-button" to="/search" title="Pesquisar"><Search size={16} /></NavLink></div>
-      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink><div className="voice-navigation"><div className="channel-heading"><span>Voz</span><button className="nav-add" onClick={() => setRoomComposerOpen((current) => !current)} title="Criar sala"><Plus size={15} /></button></div><button className="voice-create-button" onClick={() => setRoomComposerOpen(true)}><Plus size={15} /> Criar sala</button>{isRoomComposerOpen && <form className="voice-create-form" onSubmit={handleCreateRoom}><input value={roomName} onChange={(event) => setRoomName(event.target.value)} placeholder="Nome da sala" maxLength={60} autoFocus /><button className="primary-button" disabled={!roomName.trim() || isCreatingRoom}>{isCreatingRoom ? "Criando..." : "Criar"}</button></form>}{roomError && <p className="navigation-error">{roomError}</p>}{rooms.map((room) => <NavLink className="nav-item voice-nav-item" to={`/voice/${room.id}`} key={room.id}><Headphones size={16} /><span>{room.name}</span><small>{room.participantCount ?? 0}</small></NavLink>)}{rooms.length === 0 && <p className="navigation-empty">Nenhuma sala disponível.</p>}</div></nav>
+      <nav className="navigation-list">{primaryNavigation.map((item) => <NavItem item={item} key={item.to} unread={item.to === "/messages" ? unreadCount : 0} />)}<NavLink className="nav-item" to="/search"><Search size={18} /><span>Pesquisar</span></NavLink><div className="voice-navigation"><div className="channel-heading"><span>Voz</span><button className="nav-add" onClick={() => setRoomComposerOpen((current) => !current)} title="Criar sala"><Plus size={15} /></button></div><button className="voice-create-button" onClick={() => setRoomComposerOpen(true)}><Plus size={15} /> Criar sala</button>{isRoomComposerOpen && <form className="voice-create-form" onSubmit={handleCreateRoom}><input value={roomName} onChange={(event) => setRoomName(event.target.value)} placeholder="Nome da sala" maxLength={60} autoFocus /><button className="primary-button" disabled={!roomName.trim() || isCreatingRoom}>{isCreatingRoom ? "Criando..." : "Criar"}</button></form>}{roomError && <p className="navigation-error">{roomError}</p>}{rooms.map((room) => <div className="voice-room-item" key={room.id}>{room.ownerId === firebaseUser?.uid && <div className="room-actions"><button className="icon-button voice-room-menu-trigger" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setRoomActionMenuId((current) => (current === room.id ? null : room.id)); }} title="Mais opções"><MoreHorizontal size={13} /></button>{roomActionMenuId === room.id && <div className="room-menu"><button type="button" className="danger-action" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPendingRoomDelete(room); setRoomActionMenuId(null); }}>Excluir sala</button></div>}</div>}{<NavLink className="nav-item voice-nav-item" to={`/voice/${room.id}`}><Headphones size={16} /><span>{room.name}</span><small>{room.participantCount ?? 0}</small></NavLink>}</div>)}{rooms.length === 0 && <p className="navigation-empty">Nenhuma sala disponível.</p>}</div></nav>
       <div className="navigation-footer"><div className="footer-user"><div className="avatar avatar-fallback">{profile?.displayName?.[0] ?? "V"}</div><div><strong>{profile?.displayName ?? "Usuário"}</strong><span>online no app</span></div></div><div className="footer-actions"><NavLink className="icon-button" to="/settings" title="Configurações"><Settings size={16} /></NavLink><button className="icon-button" onClick={logout} title="Sair"><LogOut size={16} /></button></div></div>
     </aside>
       <section className="workspace-main"><Outlet /></section>
     <div className="mobile-voice-navigation"><div className="mobile-voice-heading"><span>Voz</span><button onClick={() => setRoomComposerOpen((current) => !current)} title="Criar sala"><Plus size={15} /></button></div>{isRoomComposerOpen && <form className="mobile-voice-form" onSubmit={handleCreateRoom}><input value={roomName} onChange={(event) => setRoomName(event.target.value)} placeholder="Nome da sala" maxLength={60} /><button className="primary-button" disabled={!roomName.trim() || isCreatingRoom}>{isCreatingRoom ? "Criando..." : "Criar"}</button></form>}<div className="mobile-voice-list">{rooms.map((room) => <NavLink to={`/voice/${room.id}`} key={room.id}><Headphones size={14} /><span>{room.name}</span></NavLink>)}{rooms.length === 0 && <span className="mobile-voice-empty">Nenhuma sala</span>}</div></div>
+      {pendingRoomDelete && <div className="composer-backdrop" onClick={() => setPendingRoomDelete(null)}><div className="composer-modal confirmation-modal" onClick={(event) => event.stopPropagation()}><button className="composer-close" type="button" onClick={() => setPendingRoomDelete(null)} title="Fechar"><MoreHorizontal size={16} /></button><p className="eyebrow">Sala de voz</p><h2>Excluir sala de voz?</h2><p>Esta ação removerá a sala permanentemente.</p><div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setPendingRoomDelete(null)}>Cancelar</button><button className="destructive-button" type="button" onClick={() => handleDeleteRoom(pendingRoomDelete)} disabled={deletingRoomId === pendingRoomDelete.id}>{deletingRoomId === pendingRoomDelete.id ? "Excluindo..." : "Excluir"}</button></div></div></div>}
       {activeRoomId && <VoiceMiniPlayer onOpen={() => navigate(`/voice/${activeRoomId}`)} />}
       {contact && <PrivateChatOverlay contact={contact} messages={messages} error={directMessageError} text={directText} setText={setDirectText} isSending={isSendingDirectMessage} onClose={closePrivateChat} onSend={async (event) => { event.preventDefault(); if (isSendingDirectMessage || !directText.trim()) return; setSendingDirectMessage(true); try { await sendMessage(directText); setDirectText(""); } catch (error) { console.error("[DirectMessage] falha ao enviar pela interface", error); } finally { setSendingDirectMessage(false); } }} />}
   </div>;

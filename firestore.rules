@@ -23,6 +23,10 @@ service cloud.firestore {
         : secondUid + '::' + firstUid;
     }
 
+    function conversationId(firstUid, secondUid) {
+      return firstUid < secondUid ? firstUid + '_' + secondUid : secondUid + '_' + firstUid;
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId;
@@ -73,13 +77,18 @@ service cloud.firestore {
 
     match /directMessages/{messageId} {
       allow read: if signedIn()
+        && resource.data.conversationId == conversationId(resource.data.senderId, resource.data.recipientId)
         && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
       allow create: if signedIn()
         && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.recipientId != request.auth.uid;
+        && request.resource.data.recipientId != request.auth.uid
+        && request.resource.data.conversationId == conversationId(request.auth.uid, request.resource.data.recipientId)
+        && request.resource.data.read == false;
       allow update: if signedIn()
         && resource.data.recipientId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        && resource.data.conversationId == conversationId(resource.data.senderId, resource.data.recipientId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
       allow delete: if false;
     }
 

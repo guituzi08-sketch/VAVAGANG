@@ -1,4 +1,4 @@
-import { addDoc, collection, onSnapshot, query, where, serverTimestamp, updateDoc, doc } from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { isBlocked } from "./friendService";
 import { createNotification } from "./notificationService";
@@ -10,21 +10,14 @@ export function conversationId(firstUid, secondUid) {
 
 export function subscribeToDirectMessages(userId, contactId, onChange, onError) {
   const currentConversationId = conversationId(userId, contactId);
-  const messagesBySource = { sent: new Map(), received: new Map() };
-  const publish = () => onChange([...messagesBySource.sent.values(), ...messagesBySource.received.values()]
-    .filter((message) => message.conversationId === currentConversationId)
-    .sort((first, second) => timestampValue(first.createdAt) - timestampValue(second.createdAt)));
-  const unsubscribeSent = onSnapshot(query(collection(db, "directMessages"), where("senderId", "==", userId)), (snapshot) => {
-    messagesBySource.sent.clear();
-    snapshot.docs.forEach((message) => messagesBySource.sent.set(message.id, { id: message.id, ...message.data() }));
-    publish();
-  }, onError);
-  const unsubscribeReceived = onSnapshot(query(collection(db, "directMessages"), where("recipientId", "==", userId)), (snapshot) => {
-    messagesBySource.received.clear();
-    snapshot.docs.forEach((message) => messagesBySource.received.set(message.id, { id: message.id, ...message.data() }));
-    publish();
-  }, onError);
-  return () => { unsubscribeSent(); unsubscribeReceived(); };
+  return onSnapshot(
+    query(collection(db, "directMessages"), where("conversationId", "==", currentConversationId), orderBy("createdAt", "asc")),
+    (snapshot) => {
+      const nextMessages = snapshot.docs.map((message) => ({ id: message.id, ...message.data() }));
+      onChange(nextMessages.sort((first, second) => timestampValue(first.createdAt) - timestampValue(second.createdAt)));
+    },
+    onError,
+  );
 }
 
 export function subscribeToUnreadDirectMessages(userId, onChange, onError) {
