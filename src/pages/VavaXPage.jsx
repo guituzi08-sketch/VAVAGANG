@@ -9,7 +9,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -38,6 +38,7 @@ export default function VavaXPage() {
   const [error, setError] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const notificationsRef = useRef(null);
 
   useEffect(
     () =>
@@ -47,6 +48,14 @@ export default function VavaXPage() {
     [],
   );
   useEffect(() => subscribeToVavaXNotifications(firebaseUser.uid, setNotifications, () => setError("Não foi possível carregar as notificações.")), [firebaseUser.uid]);
+  useEffect(() => {
+    if (!showNotifications) return undefined;
+    function closeOnOutsideClick(event) {
+      if (!notificationsRef.current?.contains(event.target)) setShowNotifications(false);
+    }
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [showNotifications]);
 
   async function publish(event) {
     event.preventDefault();
@@ -78,10 +87,25 @@ export default function VavaXPage() {
           <span className="vavax-status">
             <i /> conectado
           </span>
-          <button className="icon-button" title="Notificações VavaX" onClick={() => setShowNotifications((current) => !current)}>
-            <Bell size={16} /> {notifications.filter((item) => !item.read).length || ""}
-          </button>
-          {showNotifications && <div className="vavax-notifications">{notifications.length === 0 && <span>Nenhuma notificação.</span>}{notifications.slice(0, 8).map((item) => <button key={item.id} className={item.read ? "" : "unread"} onClick={() => markVavaXNotificationRead(item.id).catch(() => setError("Não foi possível atualizar a notificação."))}>{item.senderName} {item.type === "like" ? "curtiu seu post." : item.type === "comment" ? "comentou no seu post." : "começou a seguir você."}</button>)}</div>}
+          <div className="vavax-notification-anchor" ref={notificationsRef}>
+            <button className="icon-button" title="Notificações VavaX" onClick={() => setShowNotifications((current) => !current)}>
+              <Bell size={16} /> {notifications.filter((item) => !item.read).length || ""}
+            </button>
+            {showNotifications && (
+              <div className="vavax-notifications" role="dialog" aria-label="Notificações">
+                <h2>Notificações</h2>
+                <div className="vavax-notification-list">
+                  {notifications.length === 0 && <span className="vavax-notification-empty">Nenhuma notificação.</span>}
+                  {notifications.slice(0, 8).map((item) => (
+                    <button key={item.id} className={item.read ? "vavax-notification" : "vavax-notification unread"} onClick={() => markVavaXNotificationRead(item.id).catch(() => setError("Não foi possível atualizar a notificação."))}>
+                      <strong>{item.senderName}</strong>
+                      <span>{item.type === "like" ? "curtiu seu post." : item.type === "comment" ? "comentou no seu post." : "começou a seguir você."}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="avatar avatar-fallback">
             {profile?.displayName?.[0] ?? "V"}
           </div>
