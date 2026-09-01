@@ -155,7 +155,8 @@ service cloud.firestore {
 
     match /vavaxPosts/{postId} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.mediaType in ['image', 'video'];
       allow update: if signedIn() && request.resource.data.authorId == resource.data.authorId
         && ((resource.data.authorId == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['caption', 'mediaUrl']))

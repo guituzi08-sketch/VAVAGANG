@@ -18,6 +18,41 @@ import { db } from "../firebase";
 
 const postsCollection = collection(db, "vavaxPosts");
 
+const directVideoPattern = /\.(mp4|webm|ogg|ogv)(?:$|[?#])/i;
+
+function getYouTubeEmbedUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+  let videoId = "";
+  if (hostname === "youtu.be") videoId = url.pathname.slice(1).split("/")[0];
+  if (["youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(hostname)) {
+    videoId = url.searchParams.get("v") || url.pathname.match(/^\/(?:embed\/|shorts\/|live\/)([^/?]+)/)?.[1] || "";
+  }
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return "";
+  return `https://www.youtube-nocookie.com/embed/${videoId}`;
+}
+
+function getVimeoEmbedUrl(url) {
+  if (!["vimeo.com", "www.vimeo.com", "player.vimeo.com"].includes(url.hostname.toLowerCase())) return "";
+  const videoId = url.pathname.match(/\/(?:video\/)?(\d+)(?:$|\/)/)?.[1];
+  return videoId ? `https://player.vimeo.com/video/${videoId}` : "";
+}
+
+export function classifyVavaXMedia(mediaUrl) {
+  let url;
+  try {
+    url = new URL(mediaUrl.trim());
+  } catch {
+    return null;
+  }
+  if (!["http:", "https:"].includes(url.protocol)) return null;
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(url);
+  if (youtubeEmbedUrl) return { type: "video", provider: "youtube", embedUrl: youtubeEmbedUrl };
+  const vimeoEmbedUrl = getVimeoEmbedUrl(url);
+  if (vimeoEmbedUrl) return { type: "video", provider: "vimeo", embedUrl: vimeoEmbedUrl };
+  if (directVideoPattern.test(url.pathname + url.search)) return { type: "video", provider: "direct" };
+  return { type: "image" };
+}
+
 export function subscribeToVavaXPosts(onChange, onError) {
   return onSnapshot(
     query(postsCollection, orderBy("createdAt", "desc")),
@@ -34,14 +69,18 @@ export function subscribeToVavaXComments(postId, onChange, onError) {
   );
 }
 
-export async function createVavaXPost({ author, mediaUrl, caption }) {
+export async function createVavaXPost({ author, mediaUrl, mediaType, caption }) {
   const cleanUrl = mediaUrl.trim();
-  if (!/^https?:\/\/\S+$/i.test(cleanUrl)) throw new Error("Informe uma URL de imagem válida.");
+  const media = classifyVavaXMedia(cleanUrl);
+  if (!media || (mediaType === "video" && media.type !== "video") || (mediaType === "image" && media.type !== "image")) {
+    throw new Error(mediaType === "video" ? "Informe uma URL de vídeo válida do YouTube, Vimeo ou de um arquivo compatível." : "Informe uma URL de imagem válida.");
+  }
   const post = await addDoc(postsCollection, {
     authorId: author.uid,
     displayName: author.nickname || author.displayName || "Usuário",
     username: author.username ?? "",
     mediaUrl: cleanUrl,
+    mediaType: media.type,
     caption: caption.trim(),
     likeCount: 0,
     commentCount: 0,

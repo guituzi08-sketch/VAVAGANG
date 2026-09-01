@@ -15,6 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   addVavaXComment,
   createVavaXPost,
+  classifyVavaXMedia,
   deleteVavaXPost,
   hasVavaXLike,
   isVavaXFollowing,
@@ -31,6 +32,7 @@ export default function VavaXPage() {
   const { firebaseUser, profile } = useAuth();
   const [posts, setPosts] = useState([]);
   const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaType, setMediaType] = useState("image");
   const [caption, setCaption] = useState("");
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [error, setError] = useState("");
@@ -52,9 +54,11 @@ export default function VavaXPage() {
       await createVavaXPost({
         author: profile || firebaseUser,
         mediaUrl,
+        mediaType,
         caption,
       });
       setMediaUrl("");
+      setMediaType("image");
       setCaption("");
       setComposerOpen(false);
       setError("");
@@ -163,11 +167,18 @@ export default function VavaXPage() {
             <p className="eyebrow">Novo post</p>
             <h2>Compartilhar no VavaX</h2>
             <label>
-              URL da imagem
+              Tipo de publicação
+              <select value={mediaType} onChange={(event) => setMediaType(event.target.value)}>
+                <option value="image">Imagem</option>
+                <option value="video">Vídeo/URL</option>
+              </select>
+            </label>
+            <label>
+              {mediaType === "video" ? "URL do vídeo" : "URL da imagem"}
               <input
                 value={mediaUrl}
                 onChange={(event) => setMediaUrl(event.target.value)}
-                placeholder="https://..."
+                placeholder={mediaType === "video" ? "YouTube, Vimeo ou arquivo .mp4/.webm" : "https://..."}
                 required
               />
             </label>
@@ -180,6 +191,7 @@ export default function VavaXPage() {
                 maxLength={500}
               />
             </label>
+            {error && <p className="vavax-form-error" role="alert">{error}</p>}
             <button className="primary-button" type="submit">
               <Send size={15} /> Publicar post
             </button>
@@ -291,14 +303,7 @@ function VavaXPost({ post, user, onError }) {
           )}
         </div>
       </header>
-      <img
-        className="vavax-post-media"
-        src={post.mediaUrl}
-        alt={post.caption || "Imagem publicada no VavaX"}
-        onError={(event) => {
-          event.currentTarget.style.display = "none";
-        }}
-      />
+      <VavaXPostMedia post={post} onError={onError} />
       {post.caption && <p className="vavax-caption">{post.caption}</p>}
       <div className="vavax-post-meta">
         <button
@@ -342,4 +347,19 @@ function VavaXPost({ post, user, onError }) {
       )}
     </article>
   );
+}
+
+function VavaXPostMedia({ post, onError }) {
+  const [failed, setFailed] = useState(false);
+  const media = post.mediaType === "video" ? classifyVavaXMedia(post.mediaUrl) : null;
+  if (failed || (post.mediaType === "video" && !media)) {
+    return <p className="vavax-media-error">Não foi possível reproduzir este vídeo.</p>;
+  }
+  if (post.mediaType !== "video") {
+    return <img className="vavax-post-media" src={post.mediaUrl} alt={post.caption || "Imagem publicada no VavaX"} onError={(event) => { event.currentTarget.style.display = "none"; }} />;
+  }
+  if (media.provider !== "direct") {
+    return <iframe className="vavax-post-media vavax-post-embed" src={media.embedUrl} title={post.caption || "Vídeo publicado no VavaX"} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen onError={() => setFailed(true)} />;
+  }
+  return <video className="vavax-post-media" src={post.mediaUrl} controls preload="metadata" onError={() => { setFailed(true); onError("Não foi possível reproduzir este vídeo."); }} />;
 }
