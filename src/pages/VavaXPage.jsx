@@ -46,7 +46,7 @@ export default function VavaXPage() {
       ),
     [],
   );
-  useEffect(() => subscribeToVavaXNotifications(firebaseUser.uid, setNotifications, (snapshotError) => setError(getErrorMessage(snapshotError, "Não foi possível carregar as notificações."))), [firebaseUser.uid]);
+  useEffect(() => subscribeToVavaXNotifications(firebaseUser.uid, setNotifications, () => setError("Não foi possível carregar as notificações.")), [firebaseUser.uid]);
 
   async function publish(event) {
     event.preventDefault();
@@ -63,7 +63,7 @@ export default function VavaXPage() {
       setComposerOpen(false);
       setError("");
     } catch (publishError) {
-      setError(getErrorMessage(publishError, "Não foi possível publicar o post."));
+      setError(publishError.code ? "Não foi possível publicar o post." : getErrorMessage(publishError, "Não foi possível publicar o post."));
     }
   }
 
@@ -81,7 +81,7 @@ export default function VavaXPage() {
           <button className="icon-button" title="Notificações VavaX" onClick={() => setShowNotifications((current) => !current)}>
             <Bell size={16} /> {notifications.filter((item) => !item.read).length || ""}
           </button>
-          {showNotifications && <div className="vavax-notifications">{notifications.length === 0 && <span>Nenhuma notificação.</span>}{notifications.slice(0, 8).map((item) => <button key={item.id} className={item.read ? "" : "unread"} onClick={() => markVavaXNotificationRead(item.id).catch((notificationError) => setError(notificationError.message))}>{item.senderName} {item.type === "like" ? "curtiu seu post." : item.type === "comment" ? "comentou no seu post." : "começou a seguir você."}</button>)}</div>}
+          {showNotifications && <div className="vavax-notifications">{notifications.length === 0 && <span>Nenhuma notificação.</span>}{notifications.slice(0, 8).map((item) => <button key={item.id} className={item.read ? "" : "unread"} onClick={() => markVavaXNotificationRead(item.id).catch(() => setError("Não foi possível atualizar a notificação."))}>{item.senderName} {item.type === "like" ? "curtiu seu post." : item.type === "comment" ? "comentou no seu post." : "começou a seguir você."}</button>)}</div>}
           <div className="avatar avatar-fallback">
             {profile?.displayName?.[0] ?? "V"}
           </div>
@@ -212,7 +212,7 @@ function VavaXPost({ post, user, onError }) {
   useEffect(
     () =>
       subscribeToVavaXComments(post.id, setComments, (error) =>
-        onError(error.message),
+        onError("Não foi possível carregar os comentários."),
       ),
     [post.id, onError],
   );
@@ -228,7 +228,7 @@ function VavaXPost({ post, user, onError }) {
           setFollowing(nextFollowing);
         }
       })
-      .catch((error) => onError(error.message));
+      .catch(() => onError("Não foi possível carregar as interações do post."));
     return () => {
       active = false;
     };
@@ -238,7 +238,7 @@ function VavaXPost({ post, user, onError }) {
     try {
       setLiked(await toggleVavaXLike(post, user));
     } catch (error) {
-      onError(error.message);
+      onError("Não foi possível atualizar a curtida.");
     }
   }
 
@@ -246,7 +246,7 @@ function VavaXPost({ post, user, onError }) {
     try {
       setFollowing(await toggleVavaXFollow(post.authorId, user));
     } catch (error) {
-      onError(error.message);
+      onError("Não foi possível atualizar o seguimento.");
     }
   }
 
@@ -257,7 +257,7 @@ function VavaXPost({ post, user, onError }) {
       setCommentText("");
       setShowComments(true);
     } catch (error) {
-      onError(error.message);
+      onError("Não foi possível publicar o comentário.");
     }
   }
 
@@ -266,7 +266,7 @@ function VavaXPost({ post, user, onError }) {
     try {
       await deleteVavaXPost(post.id);
     } catch (error) {
-      onError(error.message);
+      onError("Não foi possível excluir o post.");
     }
   }
 

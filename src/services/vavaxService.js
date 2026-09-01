@@ -161,10 +161,16 @@ export async function createVavaXNotification(recipientId, user, type, metadata)
 
 export function subscribeToVavaXNotifications(userId, onChange, onError) {
   return onSnapshot(
-    query(collection(db, "vavaxNotifications"), where("recipientId", "==", userId), orderBy("createdAt", "desc")),
-    (snapshot) => onChange(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+    query(collection(db, "vavaxNotifications"), where("recipientId", "==", userId)),
+    (snapshot) => onChange(snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .sort((first, second) => getTimestamp(second.createdAt) - getTimestamp(first.createdAt))),
     onError,
   );
+}
+
+function getTimestamp(value) {
+  return value?.toMillis?.() ?? (value?.seconds ? value.seconds * 1000 : 0);
 }
 
 export async function markVavaXNotificationRead(notificationId) {
