@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import Avatar from "../components/Avatar";
+import { removeProfileImage, uploadProfileImage, validateProfileImage } from "../services/profileImageService";
 import { updateUserProfile } from "../services/userService";
 import { getErrorMessage } from "../utils/errorMessage";
 
@@ -347,6 +349,56 @@ function ProfileSettings({ profile, refreshProfile }) {
   const [avatar, setAvatar] = useState(profile?.photoURL ?? "");
   const [banner, setBanner] = useState(profile?.bannerURL ?? "");
   const [preview, setPreview] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [avatarMessage, setAvatarMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  function selectAvatar(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setAvatarMessage("");
+    try {
+      validateProfileImage(file);
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    } catch (error) {
+      setAvatarMessage(error.message);
+    }
+  }
+  async function saveAvatar() {
+    if (!selectedFile) return;
+    setUploading(true);
+    setAvatarMessage("Enviando imagem...");
+    try {
+      const url = await uploadProfileImage(profile.uid, selectedFile);
+      await refreshProfile({ photoURL: url });
+      setAvatar(url);
+      setSelectedFile(null);
+      setPreviewUrl("");
+      setAvatarMessage("Foto de perfil atualizada.");
+    } catch (error) {
+      setAvatarMessage(error.message || "Não foi possível atualizar a foto de perfil.");
+    } finally {
+      setUploading(false);
+    }
+  }
+  async function clearAvatar() {
+    setUploading(true);
+    setAvatarMessage("");
+    try {
+      await removeProfileImage(profile.uid);
+      await refreshProfile({ photoURL: "" });
+      setAvatar("");
+      setSelectedFile(null);
+      setPreviewUrl("");
+      setAvatarMessage("Foto de perfil removida.");
+    } catch (error) {
+      setAvatarMessage(error.message || "Não foi possível remover a foto de perfil.");
+    } finally {
+      setUploading(false);
+    }
+  }
   async function save() {
     await refreshProfile({ photoURL: avatar, bannerURL: banner });
   }
@@ -359,17 +411,19 @@ function ProfileSettings({ profile, refreshProfile }) {
       />
       <SettingCard
         title="Avatar"
-        description="Use uma URL de imagem segura enquanto o Firebase Storage não estiver habilitado neste projeto."
+        description="Escolha uma imagem JPG, PNG ou WEBP de até 5 MB."
       >
         <div className="profile-media-row">
-          <div className="avatar avatar-fallback account-avatar">
-            {profile?.displayName?.[0] ?? "V"}
+          <Avatar profile={{ ...profile, photoURL: previewUrl || avatar }} className="avatar account-avatar" />
+          <div className="profile-upload-controls">
+            <label className="secondary-button profile-file-button">
+              <Camera size={16} /> Alterar foto
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectAvatar} disabled={uploading} />
+            </label>
+            {selectedFile && <button className="primary-button" type="button" onClick={saveAvatar} disabled={uploading}>{uploading ? "Enviando imagem..." : "Confirmar upload"}</button>}
+            {avatar && !selectedFile && <button className="secondary-button" type="button" onClick={clearAvatar} disabled={uploading}>Remover foto</button>}
+            {avatarMessage && <span className="settings-feedback" role="status">{avatarMessage}</span>}
           </div>
-          <TextField
-            label="URL do avatar"
-            value={avatar}
-            onChange={setAvatar}
-          />
         </div>
       </SettingCard>
       <SettingCard
@@ -394,9 +448,7 @@ function ProfileSettings({ profile, refreshProfile }) {
           className="profile-preview"
           style={banner ? { backgroundImage: `url(${banner})` } : undefined}
         >
-          <div className="avatar avatar-fallback account-avatar">
-            {profile?.displayName?.[0] ?? "V"}
-          </div>
+          <Avatar profile={{ ...profile, photoURL: previewUrl || avatar }} className="avatar account-avatar" />
           <strong>{profile?.displayName}</strong>
           <span>@{profile?.username ?? "username"}</span>
           <p>{profile?.bio || "Sua bio aparecerá aqui."}</p>

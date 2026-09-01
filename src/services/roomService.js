@@ -149,7 +149,7 @@ export async function joinRoom(roomId, user, profile = {}, callSessionId = null)
     const participantData = {
       uid: user.uid,
       displayName: profile.nickname || profile.displayName || user.displayName || user.email || "Jogador",
-      photoURL: user.photoURL ?? "",
+      photoURL: profile.photoURL ?? user.photoURL ?? "",
       status: "online",
       lastSeen: serverTimestamp(),
       muted: false,

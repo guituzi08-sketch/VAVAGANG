@@ -79,6 +79,7 @@ export async function createVavaXPost({ author, mediaUrl, mediaType, caption }) 
     authorId: author.uid,
     displayName: author.nickname || author.displayName || "Usuário",
     username: author.username ?? "",
+    photoURL: author.photoURL ?? "",
     mediaUrl: cleanUrl,
     mediaType: media.type,
     caption: caption.trim(),

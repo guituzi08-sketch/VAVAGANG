@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import Avatar from "../components/Avatar";
 import {
   addVavaXComment,
   createVavaXPost,
@@ -106,17 +107,13 @@ export default function VavaXPage() {
               </div>
             )}
           </div>
-          <div className="avatar avatar-fallback">
-            {profile?.displayName?.[0] ?? "V"}
-          </div>
+          <Avatar profile={profile} />
         </div>
       </header>
       <main className="vavax-layout">
         <aside className="vavax-sidebar">
           <div className="vavax-profile">
-            <div className="avatar avatar-fallback vavax-avatar">
-              {profile?.displayName?.[0] ?? "V"}
-            </div>
+            <Avatar profile={profile} className="avatar vavax-avatar" />
             <strong>
               {profile?.nickname || profile?.displayName || "Usuário"}
             </strong>
@@ -298,9 +295,7 @@ function VavaXPost({ post, user, onError }) {
     <article className="vavax-post">
       <header>
         <div className="vavax-author">
-          <div className="avatar avatar-fallback">
-            {post.displayName?.[0] ?? "V"}
-          </div>
+          <Avatar profile={post} />
           <div>
             <strong>{post.displayName}</strong>
             <span>@{post.username || "vavax_user"}</span>

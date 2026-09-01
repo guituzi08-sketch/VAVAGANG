@@ -17,6 +17,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocial } from "../contexts/SocialContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
+import Avatar from "./Avatar";
 import { getUserProfile, searchUsers } from "../services/userService";
 import {
   changeMemberRole,
@@ -240,7 +241,7 @@ function PersonRow({ person, children }) {
     person.status === "online" || person.presenceStatus === "online";
   return (
     <article className="person-row">
-      <div className="avatar avatar-fallback">{name[0] ?? "?"}</div>
+      <Avatar profile={person} />
       <div>
         <strong>{name}</strong>
         <span>
@@ -426,13 +427,7 @@ function SearchView() {
         <div className="social-list">
           {results.map((user) => (
             <article className="person-row" key={user.uid}>
-              <div className="avatar avatar-fallback">
-                {user.photoURL ? (
-                  <img className="avatar" src={user.photoURL} alt="" />
-                ) : (
-                  (user.displayName?.[0] ?? "?")
-                )}
-              </div>
+              <Avatar profile={user} />
               <div>
                 <strong>{user.displayName ?? "Usuário"}</strong>
                 <span>
@@ -481,9 +476,7 @@ function MessagesView() {
             key={friend.uid}
             onClick={() => openPrivateChat(friend)}
           >
-            <div className="avatar avatar-fallback">
-              {friend.displayName?.[0] ?? "?"}
-            </div>
+            <Avatar profile={friend} />
             <div>
               <strong>{friend.displayName}</strong>
               <span>{friend.status === "online" ? "Online" : "Offline"}</span>
@@ -729,9 +722,7 @@ function GroupMembersPanel({
           const member = memberProfiles[uid] ?? {};
           return (
             <article className="person-row" key={uid}>
-              <div className="avatar avatar-fallback">
-                {(member.nickname || member.displayName || uid)[0]}
-              </div>
+              <Avatar profile={member} />
               <div>
                 <strong>{member.nickname || member.displayName || uid}</strong>
                 <span>
@@ -977,9 +968,7 @@ function TextChannelView({ channelId }) {
         )}
         {(channel.messages ?? []).map((message) => (
           <article className="text-message" key={message.id}>
-            <div className="avatar avatar-fallback">
-              {message.authorName?.[0] ?? "V"}
-            </div>
+            <Avatar profile={{ displayName: message.authorName }} />
             <div>
               <strong>{message.authorName}</strong>
               <small>{formatMessageTime(message.createdAt)}</small>

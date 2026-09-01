@@ -22,14 +22,10 @@ import {
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import Avatar from "../components/Avatar";
 import { useCall } from "../contexts/CallContext";
 import { createRoom, deleteRoom, sendRoomMessage, subscribeToRoomMessages, subscribeToRooms } from "../services/roomService";
 import { getErrorMessage } from "../utils/errorMessage";
-
-function Avatar({ image, profile, size = "normal" }) {
-  if (profile?.photoURL) return <img className={`dashboard-avatar ${size}`} src={profile.photoURL} alt="" />;
-  return <span className={`dashboard-avatar dashboard-avatar-fallback ${size}`} aria-label={profile?.displayName ?? "Usuário"}>{profile?.displayName?.[0] ?? "V"}</span>;
-}
 
 export default function HomePage() {
   const { firebaseUser, profile } = useAuth();
@@ -123,14 +119,14 @@ export default function HomePage() {
           {roomError && <p className="error-message">{roomError}</p>}
           {selectedRoom && roomMessages.length === 0 && <div className="dashboard-empty">Nenhuma mensagem nesta sala. Seja o primeiro a escrever.</div>}
           {roomMessages.map((item) => <article className="dashboard-message" key={item.id}>
-            <Avatar profile={item.authorId === firebaseUser?.uid ? profile : undefined} />
+            <Avatar profile={item.authorId === firebaseUser?.uid ? profile : undefined} className="dashboard-avatar" />
             <div className="dashboard-message-content"><div className="dashboard-message-meta"><strong>{item.authorName ?? "Jogador"}</strong><time>{formatMessageTime(item.createdAt)}</time></div><p>{item.text}</p></div>
           </article>)}
           <form className="dashboard-composer" onSubmit={sendMessage}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={selectedRoom ? "Escreva uma mensagem..." : "Entre em uma sala para conversar"} disabled={!selectedRoom} /><button className="composer-send" type="submit" title="Enviar" disabled={!selectedRoom || !message.trim()}><Send size={17} /></button></form>
         </section>
 
         <aside className="dashboard-widgets">
-          <section className="voice-card"><div className="widget-header"><div><strong>{selectedRoom?.name ?? "Nenhuma sala ativa"}</strong><span className="connected"><i /> {selectedRoom ? `${selectedRoom.participantCount ?? 0} participante(s)` : "offline"}</span></div><div className="widget-tools"><Volume2 size={17} /><MoreHorizontal size={18} /></div></div><div className="voice-grid">{participants.length === 0 && <div className="dashboard-empty">Entre em uma sala para ver participantes.</div>}{participants.map((member) => <div className="voice-tile" key={member.uid}><Avatar profile={member} /><span>{member.displayName}</span></div>)}{selectedRoom && <button className="voice-tile invite-tile" onClick={() => handleVoice(selectedRoom.id)}><Plus size={23} /><span>Entrar</span></button>}</div><div className="voice-controls"><button title="Abrir câmera e voz" onClick={() => selectedRoom && handleVoice(selectedRoom.id)} disabled={!selectedRoom}><Gamepad2 size={18} /></button><button title="Compartilhar tela na sala" onClick={async () => { if (!activeRoomId && selectedRoom) await handleVoice(selectedRoom.id); await shareScreen(); }} disabled={!selectedRoom}><Share2 size={18} /></button><button title={muted ? "Ativar microfone" : "Silenciar microfone"} onClick={handleMute} className={muted ? "is-muted" : ""} disabled={!activeRoomId}>{muted ? <MicOff size={18} /> : <Mic size={18} />}</button><button className="hangup" title="Abrir sala" onClick={() => selectedRoom && handleVoice(selectedRoom.id)} disabled={!selectedRoom}><Headphones size={18} /></button></div></section>
+          <section className="voice-card"><div className="widget-header"><div><strong>{selectedRoom?.name ?? "Nenhuma sala ativa"}</strong><span className="connected"><i /> {selectedRoom ? `${selectedRoom.participantCount ?? 0} participante(s)` : "offline"}</span></div><div className="widget-tools"><Volume2 size={17} /><MoreHorizontal size={18} /></div></div><div className="voice-grid">{participants.length === 0 && <div className="dashboard-empty">Entre em uma sala para ver participantes.</div>}{participants.map((member) => <div className="voice-tile" key={member.uid}><Avatar profile={member} className="dashboard-avatar" /><span>{member.displayName}</span></div>)}{selectedRoom && <button className="voice-tile invite-tile" onClick={() => handleVoice(selectedRoom.id)}><Plus size={23} /><span>Entrar</span></button>}</div><div className="voice-controls"><button title="Abrir câmera e voz" onClick={() => selectedRoom && handleVoice(selectedRoom.id)} disabled={!selectedRoom}><Gamepad2 size={18} /></button><button title="Compartilhar tela na sala" onClick={async () => { if (!activeRoomId && selectedRoom) await handleVoice(selectedRoom.id); await shareScreen(); }} disabled={!selectedRoom}><Share2 size={18} /></button><button title={muted ? "Ativar microfone" : "Silenciar microfone"} onClick={handleMute} className={muted ? "is-muted" : ""} disabled={!activeRoomId}>{muted ? <MicOff size={18} /> : <Mic size={18} />}</button><button className="hangup" title="Abrir sala" onClick={() => selectedRoom && handleVoice(selectedRoom.id)} disabled={!selectedRoom}><Headphones size={18} /></button></div></section>
           <section className="sound-card"><div className="widget-heading"><div><Sparkles size={17} /><strong>VAVASOUND</strong></div><NavLink to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"} title="Abrir efeitos sonoros"><MoreHorizontal size={17} /></NavLink></div><p>Abra uma sala para carregar os efeitos compartilhados.</p><NavLink className="dashboard-widget-link" to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"}>{selectedRoom ? "Abrir efeitos da sala" : "Nenhuma sala disponível"}</NavLink></section>
           <section className="track-card"><div><div className="track-brand"><span>♫</span><strong>ÁUDIO DA SALA</strong></div><h2>Controles de voz</h2><p>Câmera, microfone, tela e efeitos ficam disponíveis dentro da sala.</p><NavLink className="dashboard-widget-link" to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"}>{selectedRoom ? "Abrir sala" : "Ver salas"}</NavLink></div><Headphones className="track-art-icon" size={38} /></section>
           {rooms.length > 0 && <section className="available-rooms"><div className="widget-heading"><strong>Salas disponíveis</strong><button className="dashboard-icon" onClick={() => setIsRoomComposerOpen(true)} title="Criar sala de voz"><Plus size={15} /></button><span>{rooms.length}</span></div>{rooms.slice(0, 3).map((room) => <div className="available-room-row" key={room.id}><button className={room.id === selectedRoomId ? "active" : ""} onClick={() => handleVoice(room.id)}><Volume2 size={15} /><span>{room.name}</span><small>{room.participantCount ?? 0}</small></button>{room.ownerId === firebaseUser?.uid && <button className="room-delete-action" onClick={() => handleDeleteRoom(room)} disabled={deletingRoomId === room.id} title="Excluir sala"><Trash2 size={14} /></button>}</div>)}</section>}
@@ -144,7 +140,7 @@ export default function HomePage() {
 }
 
 function Member({ name, profile, status }) {
-  return <div className="dashboard-member"><Avatar profile={profile} /><div><strong>{name}</strong>{status && <span>{status}</span>}</div></div>;
+  return <div className="dashboard-member"><Avatar profile={profile} className="dashboard-avatar" /><div><strong>{name}</strong>{status && <span>{status}</span>}</div></div>;
 }
 
 function formatMessageTime(timestamp) {
