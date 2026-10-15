@@ -93,7 +93,7 @@ export async function deleteRoom(roomId, user) {
   if ((roomSnapshot.data().ownerId ?? roomSnapshot.data().createdBy) !== user.uid) throw new Error("Você não tem permissão para excluir esta sala.");
   await updateDoc(roomRef, { status: "closed", closedAt: serverTimestamp() });
 
-  for (const subcollection of ["participants", "signals", "candidates", "reactions", "messages"]) {
+  for (const subcollection of ["participants", "signals", "candidates", "reactions", "messages", "soundEffectEvents"]) {
     const snapshot = await getDocs(collection(db, "rooms", roomId, subcollection));
     for (let start = 0; start < snapshot.docs.length; start += 450) {
       const batch = writeBatch(db);

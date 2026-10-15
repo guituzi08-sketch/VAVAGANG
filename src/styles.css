@@ -777,3 +777,10 @@ body::before, body::after { display: none; }
 	.workspace-main { padding-bottom: 105px; }
 	.dashboard-widgets { background: #2b2d31; }
 }
+
+.voice-channel-header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.voice-channel-header-actions .voice-channel-state, .voice-channel-header-actions .destructive-button { min-height: 40px; }
+.voice-channel-header-actions .destructive-button { padding: 0 14px; white-space: nowrap; }
+@media (max-width: 800px) {
+	.voice-channel-header-actions { width: 100%; justify-content: flex-start; }
+}

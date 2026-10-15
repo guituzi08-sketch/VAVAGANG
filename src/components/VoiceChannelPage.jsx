@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useDirectMessages } from "../contexts/DirectMessageContext";
 import { useSoundEffects } from "../contexts/SoundEffectsContext";
-import { sendRoomMessage, subscribeToRoom, subscribeToRoomMessages } from "../services/roomService";
+import { deleteRoom, sendRoomMessage, subscribeToRoom, subscribeToRoomMessages } from "../services/roomService";
 import ScreenShareViewer from "./ScreenShareViewer";
 import { getErrorMessage } from "../utils/errorMessage";
 
@@ -34,6 +34,7 @@ function VoiceChannelContent({ roomId }) {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [messageError, setMessageError] = useState("");
+  const [room, setRoom] = useState(null);
   const [volumes, setVolumes] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`) ?? "{}"); } catch { return {}; }
   });
@@ -43,6 +44,7 @@ function VoiceChannelContent({ roomId }) {
   const [roomName, setRoomName] = useState("");
   const [isCameraBusy, setIsCameraBusy] = useState(false);
   const [isScreenShareBusy, setIsScreenShareBusy] = useState(false);
+  const [isDeletingRoom, setIsDeletingRoom] = useState(false);
   const onRemoteAudioBlocked = useCallback(() => setAudioBlocked(true), [setAudioBlocked]);
 
   useEffect(() => {
@@ -51,7 +53,13 @@ function VoiceChannelContent({ roomId }) {
   }, [roomId]);
   useEffect(() => {
     if (!roomId) return undefined;
-    return subscribeToRoom(roomId, (room) => setRoomName(room?.name ?? ""), () => setRoomName(""));
+    return subscribeToRoom(roomId, (nextRoom) => {
+      setRoom(nextRoom);
+      setRoomName(nextRoom?.name ?? "");
+    }, () => {
+      setRoom(null);
+      setRoomName("");
+    });
   }, [roomId]);
   useEffect(() => {
     if (!roomId || activeRoomId !== roomId) {
@@ -61,10 +69,10 @@ function VoiceChannelContent({ roomId }) {
     return subscribeToRoomMessages(roomId, setMessages, (error) => setMessageError(getErrorMessage(error, "Não foi possível carregar as mensagens da sala.")));
   }, [roomId, activeRoomId]);
   useEffect(() => {
-    if (!roomClosed) return;
+    if (!roomClosed || isDeletingRoom) return;
     window.alert(roomClosedMessage || "Esta sala foi encerrada pelo proprietário.");
     navigate("/", { replace: true });
-  }, [roomClosed, roomClosedMessage, navigate]);
+  }, [roomClosed, roomClosedMessage, isDeletingRoom, navigate]);
   useEffect(() => { setAudioEnabled(localStream?.getAudioTracks()[0]?.enabled ?? true); }, [localStream]);
   useEffect(() => {
     try { localStorage.setItem(`vavagang:voice-volumes:${firebaseUser?.uid ?? "anonymous"}`, JSON.stringify(volumes)); } catch (error) { setMessageError(getErrorMessage(error, "Não foi possível salvar os volumes locais.")); }
@@ -124,11 +132,28 @@ function VoiceChannelContent({ roomId }) {
     setAudioEnabled(enabled);
   }
 
+  async function handleDeleteRoom() {
+    if (isDeletingRoom || !room || (room.ownerId ?? room.createdBy) !== firebaseUser?.uid) return;
+    if (!window.confirm(`Excluir a sala "${room.name}"? Esta ação não pode ser desfeita.`)) return;
+    setIsDeletingRoom(true);
+    setMessageError("");
+    try {
+      await deleteRoom(roomId, firebaseUser);
+      await exitCall();
+      navigate("/", { replace: true });
+    } catch (error) {
+      setMessageError(getErrorMessage(error, "Não foi possível excluir a sala."));
+    } finally {
+      setIsDeletingRoom(false);
+    }
+  }
+
   const callStatusLabel = { idle: "aguardando", "requesting-media": "solicitando microfone", "media-ready": "microfone pronto", joining: "entrando", connected: "voz ativa", reconnecting: "reconectando", leaving: "saindo", ended: "encerrada", failed: "falhou" }[callState] ?? "voz ativa";
+  const canDeleteRoom = (room?.ownerId ?? room?.createdBy) === firebaseUser?.uid;
 
   const sharedScreens = Object.entries(remoteScreenStreams ?? {}).filter(([, stream]) => stream.getVideoTracks().length > 0);
   return <div className="voice-channel-page">
-    <header className="voice-channel-header"><div><p className="eyebrow">Canal de voz</p><h1><span className="voice-glyph">🔊</span> {roomName || roomId}</h1><p className="muted">Conversa ao vivo com sua comunidade.</p></div><div className={`voice-channel-state voice-state-${callState}`}><span className="live-dot" />{isConnecting ? "conectando" : callStatusLabel}</div></header>
+    <header className="voice-channel-header"><div><p className="eyebrow">Canal de voz</p><h1><span className="voice-glyph">🔊</span> {roomName || roomId}</h1><p className="muted">Conversa ao vivo com sua comunidade.</p></div><div className="voice-channel-header-actions"><div className={`voice-channel-state voice-state-${callState}`}><span className="live-dot" />{isConnecting ? "conectando" : callStatusLabel}</div>{canDeleteRoom && <button className="destructive-button" type="button" onClick={handleDeleteRoom} disabled={isDeletingRoom} title="Excluir sala">{isDeletingRoom ? "Excluindo..." : <><Trash2 size={15} /> Excluir sala</>}</button>}</div></header>
     {screenStream && <section className="screen-share-stage"><ScreenShareViewer stream={screenStream} label="Você está compartilhando a tela" muted /></section>}
     {sharedScreens.map(([uid, stream]) => <section className="screen-share-stage" key={uid}><ScreenShareViewer stream={stream} label={`${participants.find((participant) => participant.uid === uid)?.displayName ?? "Participante"} está compartilhando a tela`} /></section>)}
     <div className="voice-channel-grid">
