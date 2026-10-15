@@ -25,8 +25,9 @@ function NavItem({ item, unread = 0 }) {
   return <NavLink className="nav-item" to={item.to} end={item.end} title={item.label}><Icon size={18} /><span>{item.label}</span>{unread > 0 && <b className="unread-badge">{unread > 9 ? "9+" : unread}</b>}</NavLink>;
 }
 
-function RailButton({ label, icon: Icon, to }) {
-  return to ? <NavLink className="rail-button" to={to} title={label}><Icon size={19} /></NavLink> : <button className="rail-button" title={label}><Icon size={19} /></button>;
+function RailButton({ label, icon: Icon, to, mobileOnly = false }) {
+  const className = `rail-button${mobileOnly ? " mobile-rail-item" : ""}`;
+  return to ? <NavLink className={className} to={to} title={label} aria-label={label}><Icon size={19} /></NavLink> : <button className={className} title={label} aria-label={label}><Icon size={19} /></button>;
 }
 
 export default function AppShell() {
@@ -98,6 +99,11 @@ export default function AppShell() {
       <div className="rail-spacer" />
       <RailButton label="Notificações" icon={Bell} to="/requests" />
       <RailButton label="Vavagram" icon={Camera} to="/vavagram" />
+      <RailButton label="Mensagens" icon={MessageSquare} to="/messages" mobileOnly />
+      <RailButton label="Voz" icon={Headphones} to={activeRoomId ? `/voice/${activeRoomId}` : rooms[0] ? `/voice/${rooms[0].id}` : "/"} mobileOnly />
+      <RailButton label="Moments" icon={Flame} to="/moments" mobileOnly />
+      <RailButton label="VavaX" icon={AtSign} to="/vavax" mobileOnly />
+      <RailButton label="Configurações" icon={Settings} to="/settings" mobileOnly />
     </aside>
     <aside className="navigation-panel" aria-label="Navegação da seção">
       <div className="navigation-header"><strong>VAVAGANG</strong><NavLink className="icon-button" to="/search" title="Pesquisar"><Search size={16} /></NavLink></div>

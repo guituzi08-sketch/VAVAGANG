@@ -26,5 +26,8 @@ export async function requestCamera() {
 
 export async function requestScreen() {
   if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("Seu navegador não suporta compartilhamento de tela.");
-  return navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  return navigator.mediaDevices.getDisplayMedia({
+    video: { frameRate: { ideal: 30, max: 60 } },
+    audio: true,
+  });
 }

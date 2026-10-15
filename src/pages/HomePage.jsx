@@ -2,7 +2,6 @@ import {
   Bell,
   ChevronDown,
   CircleHelp,
-  Compass,
   Gamepad2,
   Headphones,
   Hash,
@@ -12,7 +11,6 @@ import {
   Plus,
   Search,
   Send,
-  Settings,
   Share2,
   Sparkles,
   Trash2,
@@ -134,7 +132,6 @@ export default function HomePage() {
       </div>
 
       <aside className="dashboard-members"><div className="members-heading"><strong>MEMBROS — {participants.length}</strong><NavLink to="/friends" title="Pesquisar membros"><Search size={15} /></NavLink></div>{participants.length === 0 && <div className="dashboard-empty">Nenhum participante online nesta sala.</div>}{participants.map((member) => <Member key={member.uid} name={member.displayName} profile={member} status={member.muted ? "Microfone silenciado" : "Conectado"} />)}<NavLink to="/friends" className="members-see-all">Encontrar amigos <ChevronDown size={14} /></NavLink></aside>
-      <nav className="dashboard-mobile-nav"><NavLink to="/"><Compass size={18} /></NavLink><NavLink to={selectedRoom ? `/voice/${selectedRoom.id}` : "/"}><Headphones size={18} /></NavLink><NavLink to="/friends"><Users size={18} /></NavLink><NavLink to="/settings"><Settings size={18} /></NavLink></nav>
     </main>
   );
 }

@@ -7,6 +7,7 @@ import { SocialProvider } from "./contexts/SocialContext";
 import { SoundEffectsProvider } from "./contexts/SoundEffectsContext";
 import { getErrorMessage } from "./utils/errorMessage";
 const AppShell = lazy(() => import("./components/AppShell"));
+const HomePage = lazy(() => import("./pages/HomePage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RoomPage = lazy(() => import("./pages/RoomPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -63,7 +64,7 @@ export default function App() {
       <Route path="/login" element={firebaseUser ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route element={<AppShell />}>
-          <Route path="/" element={<VavaXPage />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/friends" element={<WorkspacePage section="friends" />} />
           <Route path="/requests" element={<WorkspacePage section="requests" />} />
           <Route path="/messages" element={<WorkspacePage section="messages" />} />
