@@ -32,15 +32,25 @@ export function CallProvider({ children }) {
   const screenStreamRef = useRef(null);
   const cleanupRef = useRef(null);
   const operationRef = useRef(Promise.resolve());
+  const cameraCaptureRef = useRef(false);
+  const screenCaptureRef = useRef(false);
 
   function reportError(error, remoteUid, failCall = true) {
     const message = error?.name === "NotAllowedError"
-      ? "Permita o uso do microfone e da câmera nas permissões do navegador."
+      ? "Permita o uso do microfone nas permissões do navegador."
       : error?.name === "NotFoundError"
-        ? "Nenhum microfone ou câmera disponível foi encontrado."
+        ? "Nenhum microfone disponível foi encontrado."
         : error?.message || "Não foi possível conectar à sala de voz.";
     setMediaError(message);
     if (!remoteUid && failCall) setCallState(CALL_STATES.FAILED);
+  }
+  function reportMediaError(error, deviceName) {
+    const message = error?.name === "NotAllowedError"
+      ? `Permita o acesso à ${deviceName} nas permissões do navegador.`
+      : error?.name === "NotFoundError"
+        ? `Nenhum dispositivo de ${deviceName} foi encontrado.`
+        : error?.message || `Não foi possível iniciar a captura da ${deviceName}.`;
+    setMediaError(message);
   }
   function setRemoteStream(uid, streams) {
     if (!streams) {
@@ -90,66 +100,141 @@ export function CallProvider({ children }) {
       const unsubscribeSignals = subscribeToSignaling(db, room.id, firebaseUser.uid, { onSignal: (signal) => manager.handleSignal(signal).catch((error) => reportError(error, signal.from)), onCandidate: (candidate) => manager.handleCandidate(candidate).catch((error) => reportError(error, candidate.from)), onError: reportError });
       const unsubscribeRoom = subscribeToRoom(room.id, (currentRoom) => { if (!currentRoom || currentRoom.status === "closed") { setRoomClosed(true); setRoomClosedMessage(currentRoom ? "Esta sala foi encerrada pelo proprietário." : "Esta sala não existe mais."); leaveCurrentRoom(); } }, reportError);
       const presenceTimer = window.setInterval(() => {
-        refreshParticipantPresence(room.id, firebaseUser.uid).catch(reportError);
+        refreshParticipantPresence(room.id, firebaseUser.uid).catch((error) => reportError(error, null, false));
       }, 15_000);
       cleanupRef.current = () => { window.clearInterval(presenceTimer); unsubscribeParticipants(); unsubscribeSignals(); unsubscribeRoom(); }; setCallState(CALL_STATES.CONNECTED);
     }).catch(async (error) => { if (sessionRef.current) await leaveCurrentRoom(); else clearSession(); reportError(error); });
     return operationRef.current;
   }
   async function exitCall() { operationRef.current = operationRef.current.then(() => leaveCurrentRoom()).catch(reportError); return operationRef.current; }
-  async function toggleAudio() { const track = localStreamRef.current?.getAudioTracks()[0]; if (!track) return false; track.enabled = !track.enabled; if (sessionRef.current && firebaseUser) await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, { muted: !track.enabled }).catch(reportError); return track.enabled; }
-  async function startCamera() { if (cameraStreamRef.current) return true; let stream; try { stream = await requestCamera(); cameraStreamRef.current = stream; setCameraStream(stream); const track = stream.getVideoTracks()[0]; track.onended = () => { stopCamera().catch(reportError); }; await managerRef.current?.replaceTrack("camera", track); if (sessionRef.current && firebaseUser) await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, { cameraEnabled: true }); return true; } catch (error) { stopMediaStream(stream); cameraStreamRef.current = null; setCameraStream(null); reportError(error, null, false); return false; } }
-  async function stopCamera() { await managerRef.current?.replaceTrack("camera", null); stopMediaStream(cameraStreamRef.current); cameraStreamRef.current = null; setCameraStream(null); if (sessionRef.current && firebaseUser) await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, { cameraEnabled: false }).catch(reportError); }
+  async function toggleAudio() { const track = localStreamRef.current?.getAudioTracks()[0]; if (!track) return false; track.enabled = !track.enabled; if (sessionRef.current && firebaseUser) await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, { muted: !track.enabled }).catch((error) => reportError(error, null, false)); return track.enabled; }
+  async function startCamera() {
+    if (cameraStreamRef.current) return true;
+    if (cameraCaptureRef.current) return false;
+    const session = sessionRef.current;
+    const manager = managerRef.current;
+    if (!session || !manager) {
+      reportError(new Error("Entre na sala antes de ligar a câmera."), null, false);
+      return false;
+    }
+    cameraCaptureRef.current = true;
+    let stream;
+    try {
+      stream = await requestCamera();
+      if (sessionRef.current !== session || managerRef.current !== manager) {
+        stopMediaStream(stream);
+        return false;
+      }
+      const track = stream.getVideoTracks()[0];
+      if (!track) throw new Error("A câmera não forneceu uma faixa de vídeo.");
+      cameraStreamRef.current = stream;
+      setCameraStream(stream);
+      track.onended = () => { stopCamera().catch(reportError); };
+      await manager.replaceTrack("camera", track);
+      if (sessionRef.current === session) {
+        await updateParticipantState(session.roomId, firebaseUser.uid, { cameraEnabled: true })
+          .catch((error) => reportError(error, null, false));
+      }
+      return true;
+    } catch (error) {
+      stopMediaStream(stream);
+      await Promise.allSettled([manager.replaceTrack("camera", null)]);
+      if (cameraStreamRef.current === stream) {
+        cameraStreamRef.current = null;
+        setCameraStream(null);
+      }
+      if (sessionRef.current === session) {
+        await updateParticipantState(session.roomId, firebaseUser.uid, { cameraEnabled: false }).catch((stateError) => reportError(stateError, null, false));
+        reportMediaError(error, "câmera");
+      }
+      return false;
+    } finally {
+      cameraCaptureRef.current = false;
+    }
+  }
+  async function stopCamera() {
+    const stream = cameraStreamRef.current;
+    const session = sessionRef.current;
+    const manager = managerRef.current;
+    cameraStreamRef.current = null;
+    setCameraStream(null);
+    stopMediaStream(stream);
+    const results = await Promise.allSettled([manager?.replaceTrack("camera", null)]);
+    results.filter((result) => result.status === "rejected").forEach((result) => reportError(result.reason, null, false));
+    if (session && sessionRef.current === session && firebaseUser) {
+      await updateParticipantState(session.roomId, firebaseUser.uid, { cameraEnabled: false }).catch((error) => reportError(error, null, false));
+    }
+  }
   async function shareScreen() {
+    if (screenCaptureRef.current) return;
     if (screenStreamRef.current) return stopScreenShare();
+    const session = sessionRef.current;
+    const manager = managerRef.current;
+    if (!session || !manager) {
+      reportError(new Error("Entre na sala antes de compartilhar a tela."), null, false);
+      return;
+    }
+    screenCaptureRef.current = true;
     let stream;
     let videoTrack;
     try {
       stream = await requestScreen();
+      if (sessionRef.current !== session || managerRef.current !== manager) {
+        stopMediaStream(stream);
+        return;
+      }
       videoTrack = stream.getVideoTracks()[0];
       if (!videoTrack) throw new Error("A captura não forneceu uma faixa de vídeo.");
       screenStreamRef.current = stream;
       setScreenStream(stream);
-      await managerRef.current?.replaceTrack("screen", videoTrack);
+      await manager.replaceTrack("screen", videoTrack);
       const audioTrack = stream.getAudioTracks()[0] ?? null;
-      await managerRef.current?.replaceTrack("screenAudio", audioTrack);
-      if (sessionRef.current && firebaseUser) {
-        await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, {
+      await manager.replaceTrack("screenAudio", audioTrack);
+      if (sessionRef.current === session && firebaseUser) {
+        await updateParticipantState(session.roomId, firebaseUser.uid, {
           screenSharing: true,
           screenAudio: Boolean(audioTrack),
-        });
+        }).catch((error) => reportError(error, null, false));
       }
       videoTrack.onended = () => { stopScreenShare().catch(reportError); };
     } catch (error) {
       videoTrack?.stop();
       await Promise.allSettled([
-        managerRef.current?.replaceTrack("screen", null),
-        managerRef.current?.replaceTrack("screenAudio", null),
+        manager.replaceTrack("screen", null),
+        manager.replaceTrack("screenAudio", null),
       ]);
       stopMediaStream(stream);
-      screenStreamRef.current = null;
-      setScreenStream(null);
-      if (sessionRef.current && firebaseUser) {
-        await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, {
+      if (screenStreamRef.current === stream) {
+        screenStreamRef.current = null;
+        setScreenStream(null);
+      }
+      if (sessionRef.current === session && firebaseUser) {
+        await updateParticipantState(session.roomId, firebaseUser.uid, {
           screenSharing: false,
           screenAudio: false,
         }).catch((stateError) => reportError(stateError, null, false));
       }
-      if (error?.name !== "AbortError") reportError(error, null, false);
+      if (sessionRef.current === session && !["AbortError", "NotAllowedError"].includes(error?.name)) {
+        reportMediaError(error, "tela");
+      }
+    } finally {
+      screenCaptureRef.current = false;
     }
   }
   async function stopScreenShare() {
     const stream = screenStreamRef.current;
+    const session = sessionRef.current;
+    const manager = managerRef.current;
     screenStreamRef.current = null;
     setScreenStream(null);
     stopMediaStream(stream);
     const results = await Promise.allSettled([
-      managerRef.current?.replaceTrack("screen", null),
-      managerRef.current?.replaceTrack("screenAudio", null),
+      manager?.replaceTrack("screen", null),
+      manager?.replaceTrack("screenAudio", null),
     ]);
     results.filter((result) => result.status === "rejected").forEach((result) => reportError(result.reason, null, false));
-    if (sessionRef.current && firebaseUser) {
-      await updateParticipantState(sessionRef.current.roomId, firebaseUser.uid, {
+    if (session && sessionRef.current === session && firebaseUser) {
+      await updateParticipantState(session.roomId, firebaseUser.uid, {
         screenSharing: false,
         screenAudio: false,
       }).catch((error) => reportError(error, null, false));

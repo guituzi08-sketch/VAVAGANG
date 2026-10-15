@@ -115,3 +115,127 @@ test("renegociação substitui a track remota anterior do mesmo tipo", async () 
   assert.deepEqual(state.remoteAudioStream.getAudioTracks(), [secondTrack]);
   manager.close();
 });
+
+test("troca tracks locais sem renegociar a conexão", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const errors = [];
+  const manager = new PeerConnectionManager({
+    db: {},
+    roomId: "room",
+    localUid: "z",
+    callSessionId: "call",
+    localStream: new FakeMediaStream([{ kind: "audio", id: "microphone" }]),
+    onRemoteStream() {},
+    onPeerState() {},
+    onError: (error) => errors.push(error),
+  });
+  const peer = await manager.ensurePeer("a");
+  const cameraTrack = { kind: "video", id: "camera" };
+  const screenTrack = { kind: "video", id: "screen" };
+  const screenAudioTrack = { kind: "audio", id: "screen-audio" };
+
+  await manager.replaceTrack("camera", cameraTrack);
+  await manager.replaceTrack("screen", screenTrack);
+  await manager.replaceTrack("screenAudio", screenAudioTrack);
+
+  assert.equal(peer.transceivers.camera.sender.track, cameraTrack);
+  assert.equal(peer.transceivers.screen.sender.track, screenTrack);
+  assert.equal(peer.transceivers.screenAudio.sender.track, screenAudioTrack);
+  assert.deepEqual(errors, []);
+  manager.close();
+});
+
+test("serializa substituições concorrentes do mesmo transceiver", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({
+    db: {},
+    roomId: "room",
+    localUid: "z",
+    callSessionId: "call",
+    localStream: new FakeMediaStream([{ kind: "audio", id: "microphone" }]),
+    onRemoteStream() {},
+    onPeerState() {},
+    onError() {},
+  });
+  const peer = await manager.ensurePeer("a");
+  const sender = peer.transceivers.screen.sender;
+  const firstTrack = { kind: "video", id: "first-screen" };
+  const latestTrack = { kind: "video", id: "latest-screen" };
+  let releaseFirst;
+  let markFirstStarted;
+  const firstStarted = new Promise((resolve) => { markFirstStarted = resolve; });
+  const firstReleased = new Promise((resolve) => { releaseFirst = resolve; });
+  sender.replaceTrack = async (track) => {
+    if (track === firstTrack) {
+      markFirstStarted();
+      await firstReleased;
+    }
+    sender.track = track;
+  };
+
+  const firstReplacement = manager.replaceTrack("screen", firstTrack);
+  await firstStarted;
+  const latestReplacement = manager.replaceTrack("screen", latestTrack);
+  releaseFirst();
+  await Promise.all([firstReplacement, latestReplacement]);
+
+  assert.equal(sender.track, latestTrack);
+  manager.close();
+});
+
+test("novos participantes recebem vídeo e áudio de tela já ativos", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({
+    db: {},
+    roomId: "room",
+    localUid: "z",
+    callSessionId: "call",
+    localStream: new FakeMediaStream([{ kind: "audio", id: "microphone" }]),
+    onRemoteStream() {},
+    onPeerState() {},
+    onError() {},
+  });
+  const firstParticipants = [
+    { uid: "z", callSessionId: "local" },
+    { uid: "a", callSessionId: "remote-a" },
+  ];
+  manager.syncParticipants(firstParticipants);
+  await Promise.all([...manager.creationLocks.values()]);
+  const cameraTrack = { kind: "video", id: "camera" };
+  const screenTrack = { kind: "video", id: "screen" };
+  const screenAudioTrack = { kind: "audio", id: "screen-audio" };
+  await manager.replaceTrack("camera", cameraTrack);
+  await manager.replaceTrack("screen", screenTrack);
+  await manager.replaceTrack("screenAudio", screenAudioTrack);
+
+  manager.syncParticipants([...firstParticipants, { uid: "b", callSessionId: "remote-b" }]);
+  await Promise.all([...manager.creationLocks.values()]);
+  const latePeer = manager.peers.get("b");
+
+  assert.equal(latePeer.transceivers.camera.sender.track, cameraTrack);
+  assert.equal(latePeer.transceivers.screen.sender.track, screenTrack);
+  assert.equal(latePeer.transceivers.screenAudio.sender.track, screenAudioTrack);
+  manager.close();
+});
+
+test("cancela o reinício ICE agendado quando o peer se reconecta", async () => {
+  const { PeerConnectionManager } = await import("./peerConnectionManager.js");
+  const manager = new PeerConnectionManager({
+    db: {},
+    roomId: "room",
+    localUid: "a",
+    callSessionId: "call",
+    localStream: new FakeMediaStream([{ kind: "audio", id: "microphone" }]),
+    onRemoteStream() {},
+    onPeerState() {},
+    onError() {},
+  });
+  const state = await manager.ensurePeer("b");
+  state.recoveryTimer = setTimeout(() => {}, 60_000);
+  state.pc.connectionState = "connected";
+
+  manager.handleConnectionState(state);
+
+  assert.equal(state.recoveryTimer, null);
+  manager.close();
+});

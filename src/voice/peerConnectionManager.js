@@ -26,6 +26,12 @@ export class PeerConnectionManager {
     this.creationLocks = new Map();
     this.participantSessions = new Map();
     this.unknownSignals = new Map();
+    this.localTracks = {
+      audio: localStream.getAudioTracks()[0] ?? null,
+      camera: null,
+      screen: null,
+      screenAudio: null,
+    };
   }
 
   reportPeerError(error, remoteUid) {
@@ -55,7 +61,7 @@ export class PeerConnectionManager {
 
   async createPeer(remoteUid, shouldOffer) {
     const pc = new RTCPeerConnection(this.rtcConfig ?? { iceServers: [{ urls: "stun:stun.l.google.com:19302" }], iceCandidatePoolSize: 10 });
-    const state = { remoteUid, peerKey: peerKey(this.localUid, remoteUid), pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), negotiationPending: false, localSessionId: createSessionId(), localOfferId: null, localOfferRevision: 0, remoteOfferRevision: 0, remoteSessionId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
+    const state = { remoteUid, peerKey: peerKey(this.localUid, remoteUid), pc, participantSessionId: this.participantSessions.get(remoteUid) ?? null, polite: this.localUid > remoteUid, makingOffer: false, ignoreOffer: false, remoteDescriptionSet: false, pendingCandidates: [], processedCandidates: new Set(), negotiation: Promise.resolve(), signaling: Promise.resolve(), trackOperations: {}, negotiationPending: false, localSessionId: createSessionId(), localOfferId: null, localOfferRevision: 0, remoteOfferRevision: 0, remoteSessionId: null, remoteAudioStream: new MediaStream(), remoteCameraStream: new MediaStream(), remoteScreenStream: new MediaStream(), closed: false };
     this.peers.set(remoteUid, state);
     const localAudioTrack = this.localStream.getAudioTracks()[0] ?? null;
     const audioSender = localAudioTrack ? pc.addTrack(localAudioTrack, this.localStream) : null;
@@ -64,7 +70,12 @@ export class PeerConnectionManager {
     const camera = pc.addTransceiver("video", { direction: "sendrecv" });
     const screen = pc.addTransceiver("video", { direction: "sendrecv" });
     state.transceivers = { audio, camera, screen, screenAudio };
-    if (!audioSender) await audio.sender.replaceTrack(null);
+    await Promise.all([
+      audioSender ? Promise.resolve() : this.queueTrackReplacement(state, "audio", this.localTracks.audio),
+      this.queueTrackReplacement(state, "camera", this.localTracks.camera),
+      this.queueTrackReplacement(state, "screen", this.localTracks.screen),
+      this.queueTrackReplacement(state, "screenAudio", this.localTracks.screenAudio),
+    ]);
     pc.ontrack = (event) => this.handleTrack(state, event);
     pc.onicecandidate = ({ candidate }) => candidate && sendCandidate(this.db, this.roomId, { from: this.localUid, to: remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId, sessionId: state.localSessionId, candidate: candidate.toJSON() }).then(() => console.info("[WebRTC] ICE sent", { localUser: this.localUid, remoteUser: remoteUid, peerKey: state.peerKey, callSessionId: this.callSessionId })).catch((error) => this.reportPeerError(error, remoteUid));
     pc.onconnectionstatechange = () => {
@@ -208,6 +219,10 @@ export class PeerConnectionManager {
 
   handleConnectionState(state) {
     const stateName = state.pc.connectionState;
+    if (stateName === PEER_STATES.CONNECTED && state.recoveryTimer) {
+      clearTimeout(state.recoveryTimer);
+      state.recoveryTimer = null;
+    }
     this.onPeerState(state.remoteUid, stateName);
     if (stateName === PEER_STATES.CONNECTED) this.logAudioStats(state).catch((error) => this.reportPeerError(error, state.remoteUid));
     if (["failed", "disconnected"].includes(stateName)) this.recover(state);
@@ -248,11 +263,21 @@ export class PeerConnectionManager {
   }
 
   replaceTrack(kind, track) {
-    return Promise.all([...this.peers.values()].map(async (state) => {
-      const transceiver = kind === "audio" ? state.transceivers.audio : kind === "camera" ? state.transceivers.camera : kind === "screen" ? state.transceivers.screen : state.transceivers.screenAudio;
-      await transceiver.sender.replaceTrack(track);
-      await this.negotiate(state);
-    }));
+    const transceiverName = kind === "screenAudio" ? "screenAudio" : kind;
+    if (!Object.hasOwn(this.localTracks, transceiverName)) {
+      return Promise.reject(new Error(`Tipo de mídia desconhecido: ${kind}`));
+    }
+    this.localTracks[transceiverName] = track ?? null;
+    return Promise.all([...this.peers.values()].map((state) => this.queueTrackReplacement(state, transceiverName, track)));
+  }
+
+  queueTrackReplacement(state, kind, track) {
+    const previousOperation = state.trackOperations[kind] ?? Promise.resolve();
+    const operation = previousOperation.then(async () => {
+      if (!state.closed) await state.transceivers[kind].sender.replaceTrack(track ?? null);
+    });
+    state.trackOperations[kind] = operation.catch(() => {});
+    return operation;
   }
 
   removePeer(remoteUid) {

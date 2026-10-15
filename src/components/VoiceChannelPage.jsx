@@ -1,5 +1,5 @@
 import { Camera, CameraOff, Headphones, MessageCircle, Mic, MicOff, MonitorUp, Music2, Send, Trash2, Upload, Users, Volume2, VolumeX } from "lucide-react";
-import { Component, useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
@@ -42,6 +42,8 @@ function VoiceChannelContent({ roomId }) {
   const [isUploading, setIsUploading] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [isCameraBusy, setIsCameraBusy] = useState(false);
+  const [isScreenShareBusy, setIsScreenShareBusy] = useState(false);
+  const onRemoteAudioBlocked = useCallback(() => setAudioBlocked(true), [setAudioBlocked]);
 
   useEffect(() => {
     enterCall(roomId);
@@ -106,6 +108,17 @@ function VoiceChannelContent({ roomId }) {
     } finally { setIsCameraBusy(false); }
   }
 
+  async function toggleScreenShare() {
+    if (isScreenShareBusy) return;
+    setIsScreenShareBusy(true);
+    try {
+      if (screenStream) await stopScreenShare();
+      else await shareScreen();
+    } finally {
+      setIsScreenShareBusy(false);
+    }
+  }
+
   async function toggleMicrophone() {
     const enabled = await toggleAudio();
     setAudioEnabled(enabled);
@@ -124,13 +137,15 @@ function VoiceChannelContent({ roomId }) {
         <div className="voice-participant-list">{participants.map((participant) => {
           const participantVolume = volumes[participant.uid] ?? 1;
           const isSharing = Boolean(remoteScreenStreams?.[participant.uid]?.getVideoTracks().length) || participant.screenSharing;
-          const cameraIsActive = participant.uid === firebaseUser?.uid ? Boolean(cameraStream) : participant.cameraEnabled === true;
           const participantCamera = participant.uid === firebaseUser?.uid ? cameraStream : remoteCameraStreams?.[participant.uid];
+          const cameraIsActive = participant.uid === firebaseUser?.uid
+            ? Boolean(cameraStream?.getVideoTracks().some((track) => track.readyState === "live"))
+            : Boolean(participantCamera?.getVideoTracks().some((track) => track.readyState === "live")) || participant.cameraEnabled === true;
           return <div className="voice-participant" key={participant.uid}><ParticipantCamera stream={cameraIsActive ? participantCamera : null} label={participant.displayName} /><span className="presence-dot" /><div><strong>{participant.displayName}</strong><small>{participant.uid === firebaseUser?.uid ? "Você" : "na sala"}</small></div><span className="participant-audio">{participant.muted ? <MicOff size={15} /> : <Mic size={15} />}</span>{isSharing && <span className="screen-share-label">📺 {participant.screenAudio ? "🔊" : ""}</span>}{participant.uid !== firebaseUser?.uid && <button className="icon-button participant-message" onClick={() => openPrivateChat({ uid: participant.uid, displayName: participant.displayName })} title="Mensagem privada"><MessageCircle size={15} /></button>}{participant.uid !== firebaseUser?.uid && <div className="participant-volume"><button className="icon-button" onClick={() => setVolumes((current) => ({ ...current, [participant.uid]: participantVolume === 0 ? 1 : 0 }))} title={participantVolume === 0 ? `Ativar ${participant.displayName}` : `Silenciar ${participant.displayName}`}>{participantVolume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}</button><button className="icon-button" onClick={() => setVolumeTarget(volumeTarget === participant.uid ? null : participant.uid)} title="Volume individual">{Math.round(participantVolume * 100)}%</button>{volumeTarget === participant.uid && <input type="range" min="0" max="1" step="0.05" value={participantVolume} onChange={(event) => setVolumes((current) => ({ ...current, [participant.uid]: Number(event.target.value) }))} aria-label={`Volume de ${participant.displayName}`} />}</div>}</div>;
         })}</div>
-        <RemoteAudio streams={remoteStreams} volumes={volumes} onBlocked={() => setAudioBlocked(true)} />
+        <RemoteAudio streams={remoteStreams} volumes={volumes} onBlocked={onRemoteAudioBlocked} />
         {audioBlocked && <button className="secondary-button" onClick={() => { document.querySelectorAll("audio").forEach((audio) => audio.play().then(() => console.info("[VOICE DEBUG] REMOTE AUDIO PLAY SUCCESS", { retry: true })).catch((error) => console.error("[VOICE DEBUG] REMOTE AUDIO PLAY FAILED", { name: error.name, message: error.message }))); setAudioBlocked(false); }}>Ativar áudio</button>}
-        <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={toggleMicrophone} title={audioEnabled ? "Silenciar" : "Ativar microfone"}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button ${cameraStream ? "active" : ""}`} onClick={toggleCamera} disabled={isCameraBusy} title={cameraStream ? "Desligar webcam" : "Ligar webcam"}>{cameraStream ? <Camera /> : <CameraOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={screenStream ? stopScreenShare : shareScreen} title={screenStream ? "Parar compartilhamento" : "Compartilhar tela"}><MonitorUp /><span>{screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
+        <div className="voice-actions"><button className={`control-button ${audioEnabled ? "" : "off"}`} onClick={toggleMicrophone} disabled={!localStream || activeRoomId !== roomId} title={audioEnabled ? "Silenciar" : "Ativar microfone"} aria-pressed={!audioEnabled}>{audioEnabled ? <Mic /> : <MicOff />}</button><button className={`control-button ${cameraStream ? "active" : ""}`} onClick={toggleCamera} disabled={!localStream || activeRoomId !== roomId || isCameraBusy} title={isCameraBusy ? "Aguardando a câmera" : cameraStream ? "Desligar webcam" : "Ligar webcam"} aria-pressed={Boolean(cameraStream)}>{cameraStream ? <Camera /> : <CameraOff />}</button><button className={`control-button screen-share-action ${screenStream ? "active" : ""}`} onClick={toggleScreenShare} disabled={!localStream || activeRoomId !== roomId || isScreenShareBusy} title={isScreenShareBusy ? "Aguardando a seleção da tela" : screenStream ? "Parar compartilhamento" : "Compartilhar tela"} aria-pressed={Boolean(screenStream)}><MonitorUp /><span>{isScreenShareBusy ? "Aguardando..." : screenStream ? "Parar compartilhamento" : "Compartilhar tela"}</span></button><button className="secondary-button" onClick={async () => { await exitCall(); navigate("/"); }}><Volume2 size={15} /> Sair da voz</button></div>
       </section>
       <section className="room-chat"><div className="voice-section-title"><span><Headphones size={16} /> Chat da sala</span><span className="chat-live">tempo real</span></div><div className="room-message-list">{messages.length === 0 && <p className="voice-empty">As mensagens desta sala aparecerão aqui.</p>}{messages.map((message) => <article className="room-message" key={message.id}><strong>{message.authorName}</strong><p>{message.text}</p></article>)}</div>{messageError && <p className="error-message">{messageError}</p>}<form className="room-message-form" onSubmit={submitMessage}><input value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Conversar em voz..." maxLength={500} disabled={isSendingMessage} /><button className="icon-button" disabled={!messageText.trim() || isSendingMessage} title="Enviar mensagem"><Send size={16} /></button></form></section>
       <section className="sound-effects-panel"><div className="voice-section-title"><span><Music2 size={16} /> Efeitos sonoros</span><span className="chat-live">compartilhado</span></div><div className="sound-effect-list">{effects.length === 0 && <p className="voice-empty">Adicione um efeito para a sala.</p>}{effects.map((effect, index) => <div className="sound-effect-pad-wrap" key={effect.id}><button className="sound-effect-button" style={{ "--pad-accent": ["#5aa7ff", "#61d8b0", "#a993ff", "#ffb86b"][index % 4] }} onClick={() => trigger(effect)} title={`Reproduzir ${effect.name}`}><Music2 size={20} /><span>{effect.name}</span></button>{effect.createdBy === firebaseUser?.uid && <button className="sound-effect-delete" onClick={async () => { if (!window.confirm(`Excluir o efeito \"${effect.name}\"?`)) return; try { await remove(effect); } catch (error) { setMessageError(getErrorMessage(error, "Não foi possível excluir o efeito sonoro.")); } }} title="Excluir efeito"><Trash2 size={13} /> Excluir</button>}</div>)}</div><form className="sound-effect-form" onSubmit={submitSoundEffect}><input value={soundName} onChange={(event) => setSoundName(event.target.value)} placeholder="Nome opcional" maxLength={60} /><label className="sound-upload-button" title="Selecionar MP3 ou WAV"><Upload size={15} /><span>Adicionar áudio</span><input name="soundFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav" /></label><button className="secondary-button sound-upload-submit" type="submit" disabled={isUploading}>{isUploading ? "Enviando..." : "Enviar"}</button></form>{soundError && <p className="error-message">{soundError}</p>}{audioBlocked && <button className="secondary-button sound-unlock" onClick={() => setAudioBlocked(false)}>Ativar efeitos</button>}</section>
@@ -145,6 +160,7 @@ function RemoteAudio({ streams, volumes, onBlocked }) {
 
 function RemoteAudioTrack({ uid, stream, volume, onBlocked }) {
   const audioRef = useRef(null);
+  const trackSignature = stream.getAudioTracks().map((track) => `${track.id}:${track.readyState}`).join("|");
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return undefined;
@@ -175,7 +191,7 @@ function RemoteAudioTrack({ uid, stream, volume, onBlocked }) {
       audioTrack?.removeEventListener("unmute", playRemoteAudio);
       audio.srcObject = null;
     };
-  }, [stream, uid, volume, onBlocked]);
+  }, [stream, uid, onBlocked, trackSignature]);
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
